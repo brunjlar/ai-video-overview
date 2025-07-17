@@ -257,16 +257,16 @@
                     // PASS 1: Get the structured markdown with placeholders
                     const preliminaryMarkdown = await getStructuredMarkdown(currentApiKey, videoFile);
                     
-                    // Extract frames and their context from the markdown
-                    const framesWithContext = await extractFramesAndContext(preliminaryMarkdown, videoFile);
+                    // FIX: This function now returns an object and the logic handles frame extraction failures.
+                    const { frames, cleanedMarkdown } = await extractFramesAndContext(preliminaryMarkdown, videoFile);
 
                     // PASS 2: Get refined, context-aware captions for each frame in parallel
-                    if (framesWithContext.length > 0) {
-                        const refinedCaptions = await getRefinedCaptionsInParallel(currentApiKey, framesWithContext);
-                        finalMarkdown = assembleFinalMarkdown(preliminaryMarkdown, framesWithContext, refinedCaptions);
+                    if (frames.length > 0) {
+                        const refinedCaptions = await getRefinedCaptionsInParallel(currentApiKey, frames);
+                        finalMarkdown = assembleFinalMarkdown(cleanedMarkdown, frames, refinedCaptions);
                     } else {
                         progressText.textContent = "No key moments identified. Assembling text-only document...";
-                        finalMarkdown = preliminaryMarkdown.replace(/\[screenshot:.*?\]/g, ''); // Clean up any stray tags
+                        finalMarkdown = cleanedMarkdown.replace(/\[screenshot:.*?\]/g, ''); // Clean up any stray tags
                     }
                     
                     resultDiv.innerHTML = marked.parse(finalMarkdown);
@@ -331,33 +331,26 @@
                 };
             }
 
-            /**
-             * NEW: Wraps a model.generateContent call with a retry mechanism featuring exponential backoff.
-             */
             async function generateContentWithRetry(model, prompt, maxRetries = 5) {
                 let lastError;
                 for (let i = 0; i < maxRetries; i++) {
-                    // Check for user interruption before making the API call
                     if (abortController && abortController.signal.aborted) {
                         throw new DOMException("Aborted by user", "AbortError");
                     }
                     try {
                         const result = await model.generateContent(prompt);
-                        return result; // Success
+                        return result;
                     } catch (error) {
                         lastError = error;
-                        // Check if the error indicates a retryable condition (e.g., server overload)
                         if (error.toString().includes('503') || error.toString().includes('overloaded')) {
-                            const delay = (2 ** i * 1000) + (Math.random() * 1000); // Exponential backoff with jitter
+                            const delay = (2 ** i * 1000) + (Math.random() * 1000);
                             console.warn(`API call failed (attempt ${i + 1}/${maxRetries}). Retrying in ${Math.round(delay)}ms...`);
                             await new Promise(resolve => setTimeout(resolve, delay));
                         } else {
-                            // Not a retryable error, so rethrow immediately
                             throw error;
                         }
                     }
                 }
-                // If all retries fail, throw the last captured error
                 throw new Error(`API call failed after ${maxRetries} attempts. Last error: ${lastError}`);
             }
 
@@ -369,7 +362,6 @@
                 progressText.textContent = "Pass 1/2: Analyzing video and generating document structure...";
                 const videoPart = await fileToGenerativePart(file);
                 
-                // FIX: Refined the prompt to be more explicit about tag placement.
                 const prompt = `
 You are an expert technical writer and video analyst. Your task is to create a single, comprehensive document from the provided video, formatted in Markdown.
 
@@ -394,20 +386,23 @@ Follow this exact structure:
 Select 10-15 of the most critical visual moments.
 The response must be PURE MARKDOWN. Do not add any conversational text like "Certainly, here is your markdown."
 `;
-                // Use the new retry wrapper for the API call
                 const result = await generateContentWithRetry(model, [prompt, videoPart]);
                 return result.response.text();
             }
             
+            // FIX: This function is now more robust. It handles failures and returns both the successfully
+            // extracted frames and a version of the markdown with tags for failed frames removed.
             async function extractFramesAndContext(markdown, videoFile) {
                 const timestampRegex = /\[screenshot:(\d{2}):(\d{2}):(\d{2})\]/g;
                 const matches = [...markdown.matchAll(timestampRegex)];
-                const frames = [];
+                const successfulFrames = [];
+                let cleanedMarkdown = markdown;
 
                 if (matches.length > 0) {
                     progressText.textContent = `Pass 1/2: Found ${matches.length} key moments. Extracting frames...`;
                     for (let i = 0; i < matches.length; i++) {
                         if (abortController.signal.aborted) throw new DOMException("Aborted", "AbortError");
+                        
                         const match = matches[i];
                         const [fullMatch, hh, mm, ss] = match;
                         const timeInSeconds = parseInt(hh) * 3600 + parseInt(mm) * 60 + parseInt(ss);
@@ -420,17 +415,19 @@ The response must be PURE MARKDOWN. Do not add any conversational text like "Cer
 
                         try {
                             const frameDataUrl = await extractFrameAtTime(videoFile, timeInSeconds);
-                            frames.push({
+                            successfulFrames.push({
                                 tag: fullMatch,
                                 dataUrl: frameDataUrl,
                                 context: context
                             });
                         } catch (e) {
-                            console.error(`Could not extract frame at ${timeInSeconds}s:`, e);
+                            console.warn(`Could not extract frame at ${timeInSeconds}s, removing tag. Error: ${e.message}`);
+                            // If extraction fails, remove the tag from the markdown so it doesn't appear in the final output.
+                            cleanedMarkdown = cleanedMarkdown.replace(fullMatch, '');
                         }
                     }
                 }
-                return frames;
+                return { frames: successfulFrames, cleanedMarkdown };
             }
 
             async function getRefinedCaptionsInParallel(apiKey, framesWithContext) {
@@ -453,7 +450,6 @@ ${frame.context}
                         }
                     };
                     
-                    // FIX: Use the new retry wrapper for each caption generation call
                     return generateContentWithRetry(model, [prompt, imagePart])
                         .then(result => result.response.text())
                         .catch(err => {
@@ -475,23 +471,37 @@ ${frame.context}
                         const imageMarkdown = `\n![${caption}](${frame.dataUrl})\n*${caption}*`;
                         tempMarkdown = tempMarkdown.replace(frame.tag, imageMarkdown);
                     }
-                } else {
-                     for (const frame of frames) {
-                        const imageMarkdown = `\n![Frame without caption](${frame.dataUrl})\n`;
-                        tempMarkdown = tempMarkdown.replace(frame.tag, imageMarkdown);
-                    }
                 }
+                // The old `else` block is no longer needed because the logic in extractFramesAndContext
+                // and the fallback caption in getRefinedCaptionsInParallel ensure the arrays always match up
+                // with the markdown content.
                 return tempMarkdown;
             }
 
+            // FIX: This function now includes a timeout to prevent it from hanging indefinitely on a problematic video.
             function extractFrameAtTime(file, timeInSeconds) {
                 return new Promise((resolve, reject) => {
+                    const timeout = 10000; // 10-second timeout per frame
+
+                    let timeoutId = setTimeout(() => {
+                        cleanup();
+                        reject(new Error(`Frame extraction timed out after ${timeout / 1000} seconds.`));
+                    }, timeout);
+
                     const video = document.createElement('video');
                     const canvas = document.createElement('canvas');
                     const context = canvas.getContext('2d');
+                    let objectUrl = URL.createObjectURL(file);
                     
-                    video.src = URL.createObjectURL(file);
-                    video.muted = true;
+                    const cleanup = () => {
+                        clearTimeout(timeoutId);
+                        if (objectUrl) {
+                            URL.revokeObjectURL(objectUrl);
+                            objectUrl = null;
+                        }
+                        video.src = '';
+                        video.load();
+                    };
 
                     video.onloadedmetadata = () => {
                         canvas.width = video.videoWidth;
@@ -500,17 +510,22 @@ ${frame.context}
                     };
 
                     video.onseeked = () => {
+                        // The 'if' condition is a safeguard for some browser behaviors
                         if (video.currentTime >= timeInSeconds) {
                             context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                            URL.revokeObjectURL(video.src);
-                            resolve(canvas.toDataURL('image/jpeg'));
+                            const dataUrl = canvas.toDataURL('image/jpeg');
+                            cleanup();
+                            resolve(dataUrl);
                         }
                     };
 
                     video.onerror = (e) => {
-                        URL.revokeObjectURL(video.src);
-                        reject(new Error('Failed to load or seek video.'));
+                        cleanup();
+                        reject(new Error('Failed to load or seek video. The file may be corrupted.'));
                     };
+
+                    video.src = objectUrl;
+                    video.muted = true;
                 });
             }
 
