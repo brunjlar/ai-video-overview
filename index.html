@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video-to-Transcript Summarizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .loader {
+            border-top-color: #3498db;
+            -webkit-animation: spin 1s linear infinite;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        #confirmationModal {
+            transition: opacity 0.3s ease;
+        }
+        .prose img {
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+        .prose figcaption {
+            text-align: center;
+            font-style: italic;
+            color: #6b7280;
+            margin-top: 0.5em;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <div class="container mx-auto max-w-4xl px-4 py-8">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-900">Video-to-Transcript Summarizer</h1>
+            <p class="text-lg text-gray-600 mt-2">Get transcripts with visual context from your videos.</p>
+        </header>
+
+        <main>
+            <!-- Step 1: API Key -->
+            <div class="bg-white p-6 rounded-xl shadow-md mb-6">
+                <h2 class="text-2xl font-semibold mb-4 text-gray-800">Step 1: Your Gemini API Key</h2>
+                <p class="text-gray-600 mb-4">Your API key is stored securely in your browser's local storage.</p>
+                <div class="flex items-center space-x-2">
+                    <input type="password" id="apiKey" placeholder="Enter your Gemini API Key" class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition">
+                    <button id="saveApiKey" class="bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-blue-700 transition">Save Key</button>
+                </div>
+                 <p id="apiKeyStatus" class="text-sm mt-2 text-green-600"></p>
+            </div>
+
+            <!-- Step 2: Input Video -->
+            <div class="bg-white p-6 rounded-xl shadow-md mb-6">
+                <h2 class="text-2xl font-semibold mb-4 text-gray-800">Step 2: Provide a Video</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="youtubeUrl" class="block text-lg font-medium text-gray-700 mb-2">YouTube URL</label>
+                        <input type="text" id="youtubeUrl" placeholder="YouTube support coming soon..." class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition disabled:bg-gray-200" disabled>
+                    </div>
+                    <div class="flex flex-col items-center justify-center bg-gray-50 p-6 rounded-lg border-2 border-dashed border-gray-300">
+                         <label for="videoUpload" class="block text-lg font-medium text-gray-700 mb-2">Upload a Video (.mp4)</label>
+                        <input type="file" id="videoUpload" accept="video/mp4" class="w-full text-sm text-gray-500
+                            file:mr-4 file:py-2 file:px-4
+                            file:rounded-full file:border-0
+                            file:text-sm file:font-semibold
+                            file:bg-blue-50 file:text-blue-700
+                            hover:file:bg-blue-100
+                            disabled:opacity-50
+                        ">
+                        <p id="fileName" class="text-sm mt-2 text-gray-500"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3: Process -->
+            <div class="text-center mb-8">
+                <button id="processBtn" class="bg-green-600 text-white font-bold py-4 px-8 rounded-lg text-lg hover:bg-green-700 transition shadow-lg disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
+                    Process Video
+                </button>
+            </div>
+
+            <!-- Step 4: Output -->
+            <div id="outputSection" class="bg-white p-6 rounded-xl shadow-md hidden">
+                 <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-2xl font-semibold text-gray-800">Result</h2>
+                    <div id="downloadButtons" class="hidden">
+                        <button id="downloadMd" class="bg-gray-700 text-white font-semibold py-2 px-4 rounded-lg hover:bg-gray-800 transition text-sm">Download .md</button>
+                    </div>
+                </div>
+
+                <div id="loadingIndicator" class="text-center py-8 hidden">
+                    <div class="loader ease-linear rounded-full border-8 border-t-8 border-gray-200 h-24 w-24 mx-auto"></div>
+                    <p id="progressText" class="mt-4 text-lg text-gray-600">Processing video...</p>
+                    <button id="interruptBtn" class="mt-4 bg-red-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-700 transition">Interrupt</button>
+                </div>
+
+                <div id="result" class="prose max-w-none prose-indigo"></div>
+                <div id="error" class="text-red-500 mt-4"></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmationModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-white rounded-xl shadow-2xl p-8 max-w-md w-full">
+            <h3 class="text-2xl font-bold text-gray-900 mb-4">Start New Process?</h3>
+            <p class="text-gray-600 mb-6">Starting a new process will clear your current results. Please make sure you have downloaded your work before proceeding.</p>
+            <div class="flex justify-end space-x-4">
+                <button id="cancelProceedBtn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-6 rounded-lg hover:bg-gray-300 transition">Cancel</button>
+                <button id="confirmProceedBtn" class="bg-red-600 text-white font-semibold py-2 px-6 rounded-lg hover:bg-red-700 transition">Proceed</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script type="module">
+        import { GoogleGenerativeAI } from "https://esm.run/@google/generative-ai";
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- Element Selectors ---
+            const apiKeyInput = document.getElementById('apiKey');
+            const saveApiKeyBtn = document.getElementById('saveApiKey');
+            const apiKeyStatus = document.getElementById('apiKeyStatus');
+            const youtubeUrlInput = document.getElementById('youtubeUrl');
+            const videoUploadInput = document.getElementById('videoUpload');
+            const fileNameDisplay = document.getElementById('fileName');
+            const processBtn = document.getElementById('processBtn');
+            const outputSection = document.getElementById('outputSection');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const progressText = document.getElementById('progressText');
+            const interruptBtn = document.getElementById('interruptBtn');
+            const resultDiv = document.getElementById('result');
+            const errorDiv = document.getElementById('error');
+            const downloadButtons = document.getElementById('downloadButtons');
+            const confirmationModal = document.getElementById('confirmationModal');
+            const confirmProceedBtn = document.getElementById('confirmProceedBtn');
+            const cancelProceedBtn = document.getElementById('cancelProceedBtn');
+            const downloadMdBtn = document.getElementById('downloadMd');
+
+            // --- State Variables ---
+            let hasResult = false;
+            let finalMarkdown = '';
+            let abortController;
+
+            // --- Initialization ---
+            const storedApiKey = localStorage.getItem('geminiApiKey');
+            if (storedApiKey) {
+                apiKeyInput.value = '********' + storedApiKey.slice(-4);
+                apiKeyStatus.textContent = 'API Key loaded from local storage.';
+                apiKeyStatus.classList.remove('text-red-500');
+                apiKeyStatus.classList.add('text-green-600');
+            } else {
+                apiKeyStatus.textContent = 'Please enter your Gemini API Key to enable processing.';
+                apiKeyStatus.classList.add('text-red-500');
+            }
+            updateProcessButtonState();
+
+            // --- Event Listeners ---
+            saveApiKeyBtn.addEventListener('click', () => {
+                const key = apiKeyInput.value.trim();
+                if (key) {
+                    localStorage.setItem('geminiApiKey', key);
+                    apiKeyStatus.textContent = 'API Key saved successfully!';
+                    apiKeyStatus.classList.remove('text-red-500');
+                    apiKeyStatus.classList.add('text-green-600');
+                    apiKeyInput.value = '********' + key.slice(-4);
+                } else {
+                    localStorage.removeItem('geminiApiKey');
+                    apiKeyStatus.textContent = 'API Key removed. Please enter a key to enable processing.';
+                    apiKeyStatus.classList.add('text-red-500');
+                }
+                updateProcessButtonState();
+            });
+
+            apiKeyInput.addEventListener('focus', () => {
+                const storedKey = localStorage.getItem('geminiApiKey');
+                if (storedKey) apiKeyInput.value = storedKey;
+            });
+            apiKeyInput.addEventListener('blur', () => {
+                const storedKey = localStorage.getItem('geminiApiKey');
+                 if (storedKey) apiKeyInput.value = '********' + storedKey.slice(-4);
+            });
+
+            videoUploadInput.addEventListener('change', () => {
+                if (videoUploadInput.files.length > 0) {
+                    fileNameDisplay.textContent = `Selected file: ${videoUploadInput.files[0].name}`;
+                    youtubeUrlInput.value = '';
+                }
+            });
+
+            processBtn.addEventListener('click', () => {
+                if (hasResult) {
+                    showConfirmationModal();
+                } else {
+                    startProcessing();
+                }
+            });
+
+            interruptBtn.addEventListener('click', () => {
+                if (abortController) {
+                    abortController.abort();
+                }
+            });
+
+            confirmProceedBtn.addEventListener('click', () => {
+                hideConfirmationModal();
+                startProcessing();
+            });
+            cancelProceedBtn.addEventListener('click', () => {
+                hideConfirmationModal();
+            });
+
+            downloadMdBtn.addEventListener('click', () => {
+                const blob = new Blob([finalMarkdown], { type: 'text/markdown' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'transcript.md';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            });
+
+            // --- Main Processing Logic ---
+            async function startProcessing() {
+                resetUI();
+                const currentApiKey = localStorage.getItem('geminiApiKey');
+                const videoFile = videoUploadInput.files[0];
+
+                if (!validateInputs(currentApiKey, videoFile)) return;
+
+                abortController = new AbortController();
+
+                try {
+                    const transcriptWithTimestamps = await getTranscriptFromGemini(currentApiKey, videoFile, abortController.signal);
+                    finalMarkdown = await enrichTranscriptWithFrames(transcriptWithTimestamps, videoFile);
+                    resultDiv.innerHTML = marked.parse(finalMarkdown);
+                    finalizeUI(true);
+                } catch (error) {
+                    if (error.name === 'AbortError') {
+                        handleError('Processing was interrupted by the user.');
+                    } else {
+                        handleError(error.message);
+                    }
+                }
+            }
+
+            // --- Helper Functions ---
+
+            function resetUI() {
+                hasResult = false;
+                finalMarkdown = '';
+                errorDiv.textContent = '';
+                resultDiv.innerHTML = '';
+                outputSection.classList.remove('hidden');
+                loadingIndicator.classList.remove('hidden');
+                downloadButtons.classList.add('hidden');
+                processBtn.disabled = true;
+                setInputsDisabled(true);
+                progressText.textContent = 'Initializing...';
+            }
+
+            function validateInputs(apiKey, file) {
+                if (!apiKey) {
+                    handleError('Please save your Gemini API Key first.');
+                    return false;
+                }
+                if (!file) {
+                    handleError('Please upload a video file.');
+                    return false;
+                }
+                return true;
+            }
+
+            function finalizeUI(success) {
+                loadingIndicator.classList.add('hidden');
+                updateProcessButtonState();
+                setInputsDisabled(false);
+                if (success) {
+                    downloadButtons.classList.remove('hidden');
+                    hasResult = true;
+                    videoUploadInput.value = '';
+                    fileNameDisplay.textContent = '';
+                }
+            }
+
+            async function fileToGenerativePart(file) {
+                const base64EncodedDataPromise = new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                    reader.readAsDataURL(file);
+                });
+                return {
+                    inlineData: { data: await base64EncodedDataPromise, mimeType: file.type },
+                };
+            }
+
+            async function getTranscriptFromGemini(apiKey, file, signal) {
+                const genAI = new GoogleGenerativeAI(apiKey);
+                const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+
+                progressText.textContent = "Encoding video file... This may take a moment.";
+
+                const videoPart = await fileToGenerativePart(file);
+
+                progressText.textContent = "Video encoded. Generating transcript with timestamps...";
+
+                // A much more sophisticated prompt to get structured, clean output.
+                const prompt = `
+You are an expert technical writer and video analyst. Your task is to create a well-structured, multi-part summary and transcript from the provided video.
+
+Follow this structure precisely:
+
+## Overall Summary
+A concise, one-paragraph summary of the entire video's content and purpose.
+
+## Key Takeaways
+A bulleted list of the 3-5 most important points or conclusions from the video.
+
+## Chapters
+Identify logical chapters or distinct topics in the video. For each chapter:
+- Create a heading: ### Chapter: [Chapter Title]
+- Below the heading, write a short, one-paragraph summary of that chapter.
+
+## Detailed Transcript
+Provide a clean, accurate transcript of the spoken content.
+- Remove filler words (e.g., "um", "ah") and correct minor grammatical errors for readability, but preserve the original meaning.
+- When you identify a key visual moment (like a new slide, a diagram, a demonstration), insert a special tag on its own line in the format: [screenshot:HH:MM:SS | A concise, one-sentence description of the visual scene.]
+
+Do NOT include any conversational introductions or conclusions like "Certainly, here is..." or "I hope this helps!". Begin the response directly with the "## Overall Summary" heading.
+`;
+
+                const result = await model.generateContent({
+                    contents: [{ role: "user", parts: [ {text: prompt}, videoPart] }],
+                    generationConfig: {
+                        temperature: 0.2, // Lower temperature for more factual, less creative output
+                    },
+                }, { signal }); // Pass the abort signal here
+
+                const response = await result.response;
+                progressText.textContent = "Transcript received. Analyzing for key moments...";
+                return response.text();
+            }
+
+            async function enrichTranscriptWithFrames(markdown, videoFile) {
+                // Updated regex to capture the description.
+                const timestampRegex = /\[screenshot:(\d{2}):(\d{2}):(\d{2}) \| (.*?)\]/g;
+                const matches = [...markdown.matchAll(timestampRegex)];
+
+                if (matches.length === 0) {
+                    progressText.textContent = "No key moments identified. Displaying text-only transcript.";
+                    return markdown;
+                }
+
+                progressText.textContent = `Found ${matches.length} key moments. Extracting frames...`;
+                let enrichedMarkdown = markdown;
+
+                for (let i = 0; i < matches.length; i++) {
+                    const match = matches[i];
+                    const [fullMatch, hh, mm, ss, description] = match;
+                    const timeInSeconds = parseInt(hh) * 3600 + parseInt(mm) * 60 + parseInt(ss);
+
+                    progressText.textContent = `Extracting frame ${i + 1} of ${matches.length} at ${hh}:${mm}:${ss}...`;
+
+                    try {
+                        const frameDataUrl = await extractFrameAtTime(videoFile, timeInSeconds);
+                        // Create a figure with a caption for better semantic HTML and styling.
+                        const imageMarkdown = `<figure>\n  <img src="${frameDataUrl}" alt="${description}">\n  <figcaption>${description}</figcaption>\n</figure>`;
+                        enrichedMarkdown = enrichedMarkdown.replace(fullMatch, imageMarkdown);
+                    } catch (e) {
+                        console.error(`Could not extract frame at ${timeInSeconds}s:`, e);
+                        enrichedMarkdown = enrichedMarkdown.replace(fullMatch, `*(Could not generate frame at ${hh}:${mm}:${ss})*`);
+                    }
+                }
+                return enrichedMarkdown;
+            }
+
+            function extractFrameAtTime(file, timeInSeconds) {
+                return new Promise((resolve, reject) => {
+                    const video = document.createElement('video');
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+
+                    video.src = URL.createObjectURL(file);
+                    video.muted = true;
+
+                    video.onloadedmetadata = () => {
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        video.currentTime = timeInSeconds;
+                    };
+
+                    video.onseeked = () => {
+                        if (video.currentTime >= timeInSeconds) {
+                            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                            URL.revokeObjectURL(video.src);
+                            resolve(canvas.toDataURL('image/jpeg'));
+                        }
+                    };
+
+                    video.onerror = (e) => {
+                        URL.revokeObjectURL(video.src);
+                        reject(new Error('Failed to load or seek video.'));
+                    };
+                });
+            }
+
+            function handleError(message) {
+                errorDiv.textContent = `Error: ${message}`;
+                finalizeUI(false);
+            }
+
+            function updateProcessButtonState() {
+                processBtn.disabled = !localStorage.getItem('geminiApiKey');
+            }
+
+            function setInputsDisabled(disabled) {
+                videoUploadInput.disabled = disabled;
+            }
+
+            function showConfirmationModal() {
+                confirmationModal.classList.remove('hidden');
+                confirmationModal.style.opacity = 1;
+            }
+
+            function hideConfirmationModal() {
+                confirmationModal.style.opacity = 0;
+                setTimeout(() => confirmationModal.classList.add('hidden'), 300);
+            }
+        });
+    </script>
+</body>
+</html>
