@@ -20,12 +20,8 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        #confirmationModal {
+        #confirmationModal, #aboutModal {
             transition: opacity 0.3s ease;
-        }
-        /* Ensure prose styles apply correctly */
-        #result {
-            padding: 1rem;
         }
         .prose img {
             border-radius: 0.5rem;
@@ -33,6 +29,12 @@
             margin-left: auto;
             margin-right: auto;
             display: block;
+        }
+        .prose em {
+            color: #6b7280;
+            display: block;
+            text-align: center;
+            font-style: italic;
         }
     </style>
 </head>
@@ -60,24 +62,18 @@
 
             <!-- Step 2: Input Video -->
             <div class="bg-white p-6 rounded-xl shadow-md mb-6">
-                <h2 class="text-2xl font-semibold mb-4 text-gray-800">Step 2: Provide a Video</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        <label for="youtubeUrl" class="block text-lg font-medium text-gray-700 mb-2">YouTube URL</label>
-                        <input type="text" id="youtubeUrl" placeholder="YouTube support coming soon..." class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition disabled:bg-gray-200" disabled>
-                    </div>
-                    <div class="flex flex-col items-center justify-center bg-gray-50 p-6 rounded-lg border-2 border-dashed border-gray-300">
-                         <label for="videoUpload" class="block text-lg font-medium text-gray-700 mb-2">Upload a Video (.mp4)</label>
-                        <input type="file" id="videoUpload" accept="video/mp4" class="w-full text-sm text-gray-500
-                            file:mr-4 file:py-2 file:px-4
-                            file:rounded-full file:border-0
-                            file:text-sm file:font-semibold
-                            file:bg-blue-50 file:text-blue-700
-                            hover:file:bg-blue-100
-                            disabled:opacity-50
-                        ">
-                        <p id="fileName" class="text-sm mt-2 text-gray-500"></p>
-                    </div>
+                <h2 class="text-2xl font-semibold mb-4 text-gray-800">Step 2: Upload a Video</h2>
+                 <div class="flex flex-col items-center justify-center bg-gray-50 p-6 rounded-lg border-2 border-dashed border-gray-300">
+                     <label for="videoUpload" class="block text-lg font-medium text-gray-700 mb-2">Upload a Video (.mp4)</label>
+                    <input type="file" id="videoUpload" accept="video/mp4" class="w-full text-sm text-gray-500
+                        file:mr-4 file:py-2 file:px-4
+                        file:rounded-full file:border-0
+                        file:text-sm file:font-semibold
+                        file:bg-blue-50 file:text-blue-700
+                        hover:file:bg-blue-100
+                        disabled:opacity-50
+                    ">
+                    <p id="fileName" class="text-sm mt-2 text-gray-500"></p>
                 </div>
             </div>
 
@@ -123,15 +119,14 @@
                 <h2>About the Video-to-Transcript Summarizer</h2>
                 <p>This application leverages the power of Google's Gemini AI to transform video content into structured, readable, and context-rich documents. It's designed for students, researchers, and anyone who needs to quickly extract and understand the key information from educational videos, lectures, or talks.</p>
                 <h3>How It Works</h3>
-                <p>The process happens entirely within your browser, ensuring your data and API key remain private. Here's the multi-pass workflow:</p>
+                <p>The process happens entirely within your browser, ensuring your data and API key remain private. It uses a sophisticated two-pass workflow to generate high-quality results:</p>
                 <ol>
-                    <li><strong>Initial Analysis:</strong> When you upload a video, the app first sends it to the Gemini 1.5 Flash model. The AI performs an initial pass to generate a clean, full transcript and identify potential "key moments" where the visuals are important for understanding. It inserts a simple placeholder tag at each of these moments.</li>
-                    <li><strong>Summarization:</strong> The app then sends the clean transcript back to the AI to generate a high-level summary, a list of key takeaways, and to identify the main chapters of the video.</li>
-                    <li><strong>Frame Extraction & Contextual Captioning:</strong> The app uses the placeholders from the first pass to extract the specific video frames. Then, in a series of parallel requests, it sends each frame *along with the surrounding text from the transcript* back to the AI. This crucial step allows the AI to generate a meaningful, context-aware caption for each image, explaining its relevance.</li>
-                    <li><strong>Final Assembly:</strong> Finally, the app assembles all these pieces—the summaries, the chaptered transcript, and the context-aware image captions—into a single, well-structured Markdown document, which is then rendered on the screen for you to read, review, and download.</li>
+                    <li><strong>Pass 1: Document Structuring:</strong> When you upload a video, the app first sends it to the Gemini 1.5 Flash model. The AI is instructed to analyze the entire video and return a single, well-structured Markdown document. This document includes an overall summary, a list of key takeaways, and the full transcript, correctly divided into chapters with individual summaries. It also identifies 10-15 of the most critical visual moments and inserts simple `[screenshot:...]` placeholder tags at the correct positions within the transcript.</li>
+                    <li><strong>Pass 2: Contextual Captioning:</strong> The app then extracts the video frames for each placeholder. In a series of parallel requests, it sends each frame *along with the surrounding text from the transcript* back to the AI. This crucial step provides the necessary context for the AI to generate a meaningful, relevant caption for each image.</li>
+                    <li><strong>Final Assembly:</strong> Finally, the app assembles the final document by replacing the placeholders in the text from Pass 1 with the high-quality captions and images from Pass 2, using proper Markdown syntax. This complete document is then rendered on the screen for you to read, review, and download.</li>
                 </ol>
                 <h3>Why this approach?</h3>
-                <p>This multi-pass, client-side architecture is designed to be both powerful and private. By breaking the complex task into smaller, focused requests, we get a much more reliable and high-quality result than a single, monolithic request could provide. All processing happens on your machine, so your video data is only ever sent directly to the Google AI API via your own key.</p>
+                <p>This two-pass, client-side architecture is designed to be both powerful and private. By breaking the complex task into smaller, focused requests, we get a much more reliable and high-quality result than a single, monolithic request could provide. All processing happens on your machine, so your video data is only ever sent directly to the Google AI API via your own key.</p>
             </div>
         </div>
     </div>
@@ -245,7 +240,7 @@
             downloadPdfBtn.addEventListener('click', () => {
                 const element = document.getElementById('result');
                 const opt = {
-                    margin:       1,
+                    margin:       0.5,
                     filename:     'transcript.pdf',
                     image:        { type: 'jpeg', quality: 0.98 },
                     html2canvas:  { scale: 2, useCORS: true },
@@ -265,20 +260,19 @@
                 abortController = new AbortController();
 
                 try {
-                    // Pass 1: Get the raw transcript with placeholders
-                    const rawTranscript = await getRawTranscript(currentApiKey, videoFile);
+                    // PASS 1: Get the structured markdown with placeholders
+                    const preliminaryMarkdown = await getStructuredMarkdown(currentApiKey, videoFile);
                     
-                    // Pass 2: Get the summaries and chapters
-                    const summaries = await getSummaries(currentApiKey, rawTranscript);
+                    // Extract frames and their context from the markdown
+                    const framesWithContext = await extractFramesAndContext(preliminaryMarkdown, videoFile);
 
-                    // Pass 3: Extract frames and get context-aware captions
-                    const framesWithContext = await extractFramesAndContext(rawTranscript, videoFile);
+                    // PASS 2: Get refined, context-aware captions for each frame in parallel
                     if (framesWithContext.length > 0) {
                         const refinedCaptions = await getRefinedCaptionsInParallel(currentApiKey, framesWithContext);
-                        finalMarkdown = assembleFinalMarkdown(summaries, rawTranscript, framesWithContext, refinedCaptions);
+                        finalMarkdown = assembleFinalMarkdown(preliminaryMarkdown, framesWithContext, refinedCaptions);
                     } else {
                         progressText.textContent = "No key moments identified. Assembling text-only document...";
-                        finalMarkdown = assembleFinalMarkdown(summaries, rawTranscript, [], []);
+                        finalMarkdown = preliminaryMarkdown.replace(/\[screenshot:.*?\]/g, ''); // Clean up any stray tags
                     }
                     
                     resultDiv.innerHTML = marked.parse(finalMarkdown);
@@ -343,46 +337,33 @@
                 };
             }
 
-            async function getRawTranscript(apiKey, file) {
+            async function getStructuredMarkdown(apiKey, file) {
                 const genAI = new GoogleGenerativeAI(apiKey);
                 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 
-                progressText.textContent = "Pass 1/3: Generating transcript and identifying key moments...";
+                progressText.textContent = "Pass 1/2: Analyzing video and generating document structure...";
                 const videoPart = await fileToGenerativePart(file);
                 
                 const prompt = `
-Analyze the provided video. Your task is to produce a clean, accurate transcript of all spoken content.
-When you identify a visually important moment that is essential for understanding the text (e.g., a new slide, a diagram), insert a special tag on its own line: [screenshot:HH:MM:SS]
-Select no more than 10-15 of the most critical visual moments.
-Do NOT add any conversational text, summaries, chapters, or conclusions. Your entire response should be only the transcript with the placeholder tags.
+You are an expert technical writer and video analyst. Your task is to create a single, comprehensive document from the provided video, formatted in Markdown. The goal is to create a document that allows someone to understand the video's content as thoroughly as possible without watching it.
+
+Follow this exact structure:
+
+1.  Create a main heading '## Overall Summary' and write a one-paragraph summary of the entire video.
+2.  Create a main heading '## Key Takeaways' and write a bulleted list of the 3-5 most important points.
+3.  Then, identify the logical chapters in the video. For each chapter you identify, you MUST repeat the following block:
+    - Create a subheading: '### Chapter: [Chapter Title]'
+    - Below the heading, write a short, one-paragraph summary of that chapter's content.
+    - Below the summary, provide a clean, accurate, and complete transcript of the spoken content *for that chapter only*.
+    - Within that chapter's transcript, when you identify a key visual moment (like a new slide, a diagram, or a demonstration), insert a special tag on its own line: [screenshot:HH:MM:SS]
+
+Select no more than 10-15 of the most critical visual moments that are essential for understanding.
+Do NOT add any conversational text, introductions, or concluding remarks. The response must be pure Markdown.
+No introductory sentence like "Certainly, here is your markdown" and no final sentence like
+"I hope this helps".
 `;
                 const result = await model.generateContent([prompt, videoPart]);
                 return result.response.text();
-            }
-
-            async function getSummaries(apiKey, transcript) {
-                const genAI = new GoogleGenerativeAI(apiKey);
-                const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
-
-                progressText.textContent = "Pass 2/3: Generating summaries and chapters...";
-                const prompt = `
-Based on the following transcript, provide a structured summary.
-
-Your response MUST be a single JSON object with three keys: "overall_summary", "key_takeaways", and "chapters".
-- "overall_summary": A string containing a one-paragraph summary.
-- "key_takeaways": An array of strings, with each string being a key point.
-- "chapters": An array of objects, where each object has two keys: "title" (a string for the chapter title) and "summary" (a string for the one-paragraph chapter summary).
-
-Transcript:
----
-${transcript}
----
-`;
-                const result = await model.generateContent({
-                    contents: [{ parts: [{text: prompt}] }],
-                    generationConfig: { responseMimeType: "application/json" }
-                });
-                return JSON.parse(result.response.text());
             }
             
             async function extractFramesAndContext(markdown, videoFile) {
@@ -391,14 +372,14 @@ ${transcript}
                 const frames = [];
 
                 if (matches.length > 0) {
-                    progressText.textContent = `Pass 2/3: Found ${matches.length} key moments. Extracting frames...`;
+                    progressText.textContent = `Pass 1/2: Found ${matches.length} key moments. Extracting frames...`;
                     for (let i = 0; i < matches.length; i++) {
                         if (abortController.signal.aborted) throw new DOMException("Aborted", "AbortError");
                         const match = matches[i];
                         const [fullMatch, hh, mm, ss] = match;
                         const timeInSeconds = parseInt(hh) * 3600 + parseInt(mm) * 60 + parseInt(ss);
                         
-                        const contextChars = 250;
+                        const contextChars = 300;
                         const tagIndex = match.index;
                         const startIndex = Math.max(0, tagIndex - contextChars);
                         const endIndex = Math.min(markdown.length, tagIndex + contextChars);
@@ -420,7 +401,7 @@ ${transcript}
             }
 
             async function getRefinedCaptionsInParallel(apiKey, framesWithContext) {
-                progressText.textContent = `Pass 3/3: Refining captions for ${framesWithContext.length} screenshots...`;
+                progressText.textContent = `Pass 2/2: Refining captions for ${framesWithContext.length} screenshots...`;
                 const genAI = new GoogleGenerativeAI(apiKey);
                 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 
@@ -453,51 +434,24 @@ ${frame.context}
             }
 
 
-            function assembleFinalMarkdown(summaries, transcript, frames, captions) {
-                let transcriptWithImages = transcript;
+            function assembleFinalMarkdown(markdown, frames, captions) {
+                let tempMarkdown = markdown;
                 if (frames.length === captions.length) {
                     for (let i = 0; i < frames.length; i++) {
                         const frame = frames[i];
                         const caption = captions[i].replace(/"/g, '').trim();
+                        // Use the suggested format for a visible caption
                         const imageMarkdown = `\n![${caption}](${frame.dataUrl})\n*${caption}*`;
-                        transcriptWithImages = transcriptWithImages.replace(frame.tag, imageMarkdown);
+                        tempMarkdown = tempMarkdown.replace(frame.tag, imageMarkdown);
+                    }
+                } else {
+                     for (const frame of frames) {
+                        const imageMarkdown = `\n![Frame without caption](${frame.dataUrl})\n`;
+                        tempMarkdown = tempMarkdown.replace(frame.tag, imageMarkdown);
                     }
                 }
-                
-                let markdown = `## Overall Summary\n\n${summaries.overall_summary}\n\n`;
-                markdown += `## Key Takeaways\n\n`;
-                summaries.key_takeaways.forEach(item => {
-                    markdown += `* ${item}\n`;
-                });
-
-                markdown += `\n## Chapters\n\n`;
-                
-                // This is a complex task. We'll approximate by finding chapter text.
-                const chapterTitles = summaries.chapters.map(c => c.title);
-                let remainingTranscript = transcriptWithImages;
-
-                for(let i = 0; i < summaries.chapters.length; i++) {
-                    const chap = summaries.chapters[i];
-                    markdown += `### Chapter: ${chap.title}\n\n${chap.summary}\n\n`;
-                    
-                    const nextChapterTitle = (i + 1 < summaries.chapters.length) ? summaries.chapters[i+1].title : null;
-                    
-                    // A simple way to segment the transcript. Find the text between chapter summaries.
-                    // This is an approximation.
-                    const chapterSummaryIndex = transcript.indexOf(chap.summary);
-                    let chapterText = "";
-
-                    if (chapterSummaryIndex !== -1) {
-                       // This part is difficult without knowing the exact start/end of a chapter's transcript.
-                       // For now, we will add the full transcript after all chapter summaries.
-                    }
-                }
-
-                markdown += `## Detailed Transcript\n\n${transcriptWithImages}`;
-
-                return markdown;
+                return tempMarkdown;
             }
-
 
             function extractFrameAtTime(file, timeInSeconds) {
                 return new Promise((resolve, reject) => {
