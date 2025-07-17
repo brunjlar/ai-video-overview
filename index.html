@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Video-to-Transcript Summarizer</title>
-    <!-- FIX: Added the typography plugin to the Tailwind CSS script for proper rendering -->
     <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -47,7 +46,6 @@
         </header>
 
         <main>
-            <!-- Step 1: API Key -->
             <div class="bg-white p-6 rounded-xl shadow-md mb-6">
                 <h2 class="text-2xl font-semibold mb-4 text-gray-800">Step 1: Your Gemini API Key</h2>
                 <p class="text-gray-600 mb-4">Your API key is stored securely in your browser's local storage.</p>
@@ -60,7 +58,6 @@
                  <p id="apiKeyStatus" class="text-sm mt-2 text-green-600"></p>
             </div>
 
-            <!-- Step 2: Input Video -->
             <div class="bg-white p-6 rounded-xl shadow-md mb-6">
                 <h2 class="text-2xl font-semibold mb-4 text-gray-800">Step 2: Upload a Video</h2>
                  <div class="flex flex-col items-center justify-center bg-gray-50 p-6 rounded-lg border-2 border-dashed border-gray-300">
@@ -77,14 +74,12 @@
                 </div>
             </div>
 
-            <!-- Step 3: Process -->
             <div class="text-center mb-8">
                 <button id="processBtn" class="bg-green-600 text-white font-bold py-4 px-8 rounded-lg text-lg hover:bg-green-700 transition shadow-lg disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
                     Process Video
                 </button>
             </div>
 
-            <!-- Step 4: Output -->
             <div id="outputSection" class="bg-white p-6 rounded-xl shadow-md hidden">
                  <div class="flex justify-between items-center mb-4">
                     <h2 class="text-2xl font-semibold text-gray-800">Result</h2>
@@ -111,7 +106,6 @@
         </footer>
     </div>
 
-    <!-- About Modal -->
     <div id="aboutModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 hidden z-50">
         <div class="bg-white rounded-xl shadow-2xl p-8 max-w-2xl w-full relative">
             <button id="closeAboutBtn" class="absolute top-4 right-4 text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
@@ -337,6 +331,37 @@
                 };
             }
 
+            /**
+             * NEW: Wraps a model.generateContent call with a retry mechanism featuring exponential backoff.
+             */
+            async function generateContentWithRetry(model, prompt, maxRetries = 5) {
+                let lastError;
+                for (let i = 0; i < maxRetries; i++) {
+                    // Check for user interruption before making the API call
+                    if (abortController && abortController.signal.aborted) {
+                        throw new DOMException("Aborted by user", "AbortError");
+                    }
+                    try {
+                        const result = await model.generateContent(prompt);
+                        return result; // Success
+                    } catch (error) {
+                        lastError = error;
+                        // Check if the error indicates a retryable condition (e.g., server overload)
+                        if (error.toString().includes('503') || error.toString().includes('overloaded')) {
+                            const delay = (2 ** i * 1000) + (Math.random() * 1000); // Exponential backoff with jitter
+                            console.warn(`API call failed (attempt ${i + 1}/${maxRetries}). Retrying in ${Math.round(delay)}ms...`);
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                        } else {
+                            // Not a retryable error, so rethrow immediately
+                            throw error;
+                        }
+                    }
+                }
+                // If all retries fail, throw the last captured error
+                throw new Error(`API call failed after ${maxRetries} attempts. Last error: ${lastError}`);
+            }
+
+
             async function getStructuredMarkdown(apiKey, file) {
                 const genAI = new GoogleGenerativeAI(apiKey);
                 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
@@ -344,25 +369,33 @@
                 progressText.textContent = "Pass 1/2: Analyzing video and generating document structure...";
                 const videoPart = await fileToGenerativePart(file);
                 
+                // FIX: Refined the prompt to be more explicit about tag placement.
                 const prompt = `
-You are an expert technical writer and video analyst. Your task is to create a single, comprehensive document from the provided video, formatted in Markdown. The goal is to create a document that allows someone to understand the video's content as thoroughly as possible without watching it.
+You are an expert technical writer and video analyst. Your task is to create a single, comprehensive document from the provided video, formatted in Markdown.
 
 Follow this exact structure:
 
 1.  Create a main heading '## Overall Summary' and write a one-paragraph summary of the entire video.
 2.  Create a main heading '## Key Takeaways' and write a bulleted list of the 3-5 most important points.
-3.  Then, identify the logical chapters in the video. For each chapter you identify, you MUST repeat the following block:
-    - Create a subheading: '### Chapter: [Chapter Title]'
-    - Below the heading, write a short, one-paragraph summary of that chapter's content.
-    - Below the summary, provide a clean, accurate, and complete transcript of the spoken content *for that chapter only*.
-    - Within that chapter's transcript, when you identify a key visual moment (like a new slide, a diagram, or a demonstration), insert a special tag on its own line: [screenshot:HH:MM:SS]
+3.  Then, identify the logical chapters in the video. For each chapter, you MUST create the following block:
+    - A subheading: '### Chapter: [Chapter Title]'
+    - A one-paragraph summary of that chapter.
+    - The full, clean transcript for that chapter.
+    - CRUCIALLY: As you write the transcript, you MUST insert a placeholder tag on its own line (with an empty line before and after) immediately after the sentence that references a key visual moment.
+    - The tag format is: [screenshot:HH:MM:SS]
 
-Select no more than 10-15 of the most critical visual moments that are essential for understanding.
-Do NOT add any conversational text, introductions, or concluding remarks. The response must be pure Markdown.
-No introductory sentence like "Certainly, here is your markdown" and no final sentence like
-"I hope this helps".
+    For example:
+    > This is a sentence in the transcript that refers to a diagram.
+    >
+    > [screenshot:01:23:45]
+    >
+    > The transcript then continues with the next sentence.
+
+Select 10-15 of the most critical visual moments.
+The response must be PURE MARKDOWN. Do not add any conversational text like "Certainly, here is your markdown."
 `;
-                const result = await model.generateContent([prompt, videoPart]);
+                // Use the new retry wrapper for the API call
+                const result = await generateContentWithRetry(model, [prompt, videoPart]);
                 return result.response.text();
             }
             
@@ -406,8 +439,6 @@ No introductory sentence like "Certainly, here is your markdown" and no final se
                 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 
                 const captionPromises = framesWithContext.map(frame => {
-                    if (abortController.signal.aborted) throw new DOMException("Aborted", "AbortError");
-                    
                     const prompt = `You are a visual analyst. Based on the provided image and its surrounding text context, write a single, concise, meaningful, one-sentence caption. The caption should describe the visual content and explain its relevance to the topic being discussed. Respond with only the caption text, nothing else.
 
 Context from transcript:
@@ -422,10 +453,11 @@ ${frame.context}
                         }
                     };
                     
-                    return model.generateContent([prompt, imagePart])
+                    // FIX: Use the new retry wrapper for each caption generation call
+                    return generateContentWithRetry(model, [prompt, imagePart])
                         .then(result => result.response.text())
                         .catch(err => {
-                            console.error("Caption generation failed for a frame:", err);
+                            console.error("Caption generation failed for a frame after all retries:", err);
                             return "A key visual from the video."; // Fallback caption
                         });
                 });
@@ -440,7 +472,6 @@ ${frame.context}
                     for (let i = 0; i < frames.length; i++) {
                         const frame = frames[i];
                         const caption = captions[i].replace(/"/g, '').trim();
-                        // Use the suggested format for a visible caption
                         const imageMarkdown = `\n![${caption}](${frame.dataUrl})\n*${caption}*`;
                         tempMarkdown = tempMarkdown.replace(frame.tag, imageMarkdown);
                     }
