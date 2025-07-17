@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Video-to-Transcript Summarizer</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -26,12 +25,9 @@
         .prose img {
             border-radius: 0.5rem;
             box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-        }
-        .prose figcaption {
-            text-align: center;
-            font-style: italic;
-            color: #6b7280;
-            margin-top: 0.5em;
+            margin-left: auto;
+            margin-right: auto;
+            display: block;
         }
     </style>
 </head>
@@ -48,10 +44,12 @@
             <div class="bg-white p-6 rounded-xl shadow-md mb-6">
                 <h2 class="text-2xl font-semibold mb-4 text-gray-800">Step 1: Your Gemini API Key</h2>
                 <p class="text-gray-600 mb-4">Your API key is stored securely in your browser's local storage.</p>
-                <div class="flex items-center space-x-2">
-                    <input type="password" id="apiKey" placeholder="Enter your Gemini API Key" class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition">
-                    <button id="saveApiKey" class="bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-blue-700 transition">Save Key</button>
-                </div>
+                <form id="apiKeyForm" onsubmit="return false;">
+                    <div class="flex items-center space-x-2">
+                        <input type="password" id="apiKey" placeholder="Enter your Gemini API Key" class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition">
+                        <button id="saveApiKey" type="submit" class="bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-blue-700 transition">Save Key</button>
+                    </div>
+                </form>
                  <p id="apiKeyStatus" class="text-sm mt-2 text-green-600"></p>
             </div>
 
@@ -121,13 +119,13 @@
 
     <script type="module">
         import { GoogleGenerativeAI } from "https://esm.run/@google/generative-ai";
+        import { marked } from "https://esm.run/marked";
 
         document.addEventListener('DOMContentLoaded', () => {
             // --- Element Selectors ---
+            const apiKeyForm = document.getElementById('apiKeyForm');
             const apiKeyInput = document.getElementById('apiKey');
-            const saveApiKeyBtn = document.getElementById('saveApiKey');
             const apiKeyStatus = document.getElementById('apiKeyStatus');
-            const youtubeUrlInput = document.getElementById('youtubeUrl');
             const videoUploadInput = document.getElementById('videoUpload');
             const fileNameDisplay = document.getElementById('fileName');
             const processBtn = document.getElementById('processBtn');
@@ -153,27 +151,22 @@
             if (storedApiKey) {
                 apiKeyInput.value = '********' + storedApiKey.slice(-4);
                 apiKeyStatus.textContent = 'API Key loaded from local storage.';
-                apiKeyStatus.classList.remove('text-red-500');
-                apiKeyStatus.classList.add('text-green-600');
             } else {
                 apiKeyStatus.textContent = 'Please enter your Gemini API Key to enable processing.';
-                apiKeyStatus.classList.add('text-red-500');
             }
             updateProcessButtonState();
 
             // --- Event Listeners ---
-            saveApiKeyBtn.addEventListener('click', () => {
+            apiKeyForm.addEventListener('submit', (event) => {
+                event.preventDefault();
                 const key = apiKeyInput.value.trim();
                 if (key) {
                     localStorage.setItem('geminiApiKey', key);
                     apiKeyStatus.textContent = 'API Key saved successfully!';
-                    apiKeyStatus.classList.remove('text-red-500');
-                    apiKeyStatus.classList.add('text-green-600');
                     apiKeyInput.value = '********' + key.slice(-4);
                 } else {
                     localStorage.removeItem('geminiApiKey');
                     apiKeyStatus.textContent = 'API Key removed. Please enter a key to enable processing.';
-                    apiKeyStatus.classList.add('text-red-500');
                 }
                 updateProcessButtonState();
             });
@@ -190,7 +183,6 @@
             videoUploadInput.addEventListener('change', () => {
                 if (videoUploadInput.files.length > 0) {
                     fileNameDisplay.textContent = `Selected file: ${videoUploadInput.files[0].name}`;
-                    youtubeUrlInput.value = '';
                 }
             });
 
@@ -204,7 +196,7 @@
 
             interruptBtn.addEventListener('click', () => {
                 if (abortController) {
-                    abortController.abort();
+                    abortController.abort("User interrupted processing.");
                 }
             });
 
@@ -239,10 +231,24 @@
                 abortController = new AbortController();
 
                 try {
-                    const transcriptWithTimestamps = await getTranscriptFromGemini(currentApiKey, videoFile, abortController.signal);
-                    finalMarkdown = await enrichTranscriptWithFrames(transcriptWithTimestamps, videoFile);
+                    // PASS 1: Get the structured markdown with placeholders
+                    const preliminaryMarkdown = await getStructuredMarkdown(currentApiKey, videoFile);
+
+                    // Extract frames based on placeholders
+                    const frames = await extractFrames(preliminaryMarkdown, videoFile);
+
+                    // PASS 2: Get refined, context-aware captions for the extracted frames
+                    if (frames.length > 0) {
+                        const refinedCaptions = await getRefinedCaptions(currentApiKey, frames, preliminaryMarkdown);
+                        finalMarkdown = assembleFinalMarkdown(preliminaryMarkdown, frames, refinedCaptions);
+                    } else {
+                        progressText.textContent = "No key moments identified. Displaying text-only document...";
+                        finalMarkdown = preliminaryMarkdown.replace(/\[screenshot:.*?\]/g, ''); // Clean up any stray tags
+                    }
+
                     resultDiv.innerHTML = marked.parse(finalMarkdown);
                     finalizeUI(true);
+
                 } catch (error) {
                     if (error.name === 'AbortError') {
                         handleError('Processing was interrupted by the user.');
@@ -302,84 +308,132 @@
                 };
             }
 
-            async function getTranscriptFromGemini(apiKey, file, signal) {
+            async function getStructuredMarkdown(apiKey, file) {
                 const genAI = new GoogleGenerativeAI(apiKey);
                 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
 
-                progressText.textContent = "Encoding video file... This may take a moment.";
-
+                progressText.textContent = "Pass 1/2: Analyzing video and generating document structure...";
                 const videoPart = await fileToGenerativePart(file);
 
-                progressText.textContent = "Video encoded. Generating transcript with timestamps...";
-
-                // A much more sophisticated prompt to get structured, clean output.
                 const prompt = `
-You are an expert technical writer and video analyst. Your task is to create a well-structured, multi-part summary and transcript from the provided video.
+You are an expert technical writer and video analyst. Your task is to create a single, comprehensive document from the provided video, formatted in Markdown.
 
-Follow this structure precisely:
+Follow this exact structure:
 
-## Overall Summary
-A concise, one-paragraph summary of the entire video's content and purpose.
+1.  Create a main heading '## Overall Summary' and write a one-paragraph summary of the entire video.
+2.  Create a main heading '## Key Takeaways' and write a bulleted list of the 3-5 most important points.
+3.  Then, identify the logical chapters in the video. For each chapter you identify, you MUST repeat the following block:
+    - Create a subheading: '### Chapter: [Chapter Title]'
+    - Below the heading, write a short, one-paragraph summary of that chapter.
+    - Below the summary, provide a clean, accurate, and complete transcript of the spoken content *for that chapter only*.
+    - Within that chapter's transcript, when you identify a key visual moment (like a new slide, a diagram, or a demonstration), insert a special tag on its own line: [screenshot:HH:MM:SS | A brief description of what should be in this image and why it's important]
 
-## Key Takeaways
-A bulleted list of the 3-5 most important points or conclusions from the video.
-
-## Chapters
-Identify logical chapters or distinct topics in the video. For each chapter:
-- Create a heading: ### Chapter: [Chapter Title]
-- Below the heading, write a short, one-paragraph summary of that chapter.
-
-## Detailed Transcript
-Provide a clean, accurate transcript of the spoken content.
-- Remove filler words (e.g., "um", "ah") and correct minor grammatical errors for readability, but preserve the original meaning.
-- When you identify a key visual moment (like a new slide, a diagram, a demonstration), insert a special tag on its own line in the format: [screenshot:HH:MM:SS | A concise, one-sentence description of the visual scene.]
-
-Do NOT include any conversational introductions or conclusions like "Certainly, here is..." or "I hope this helps!". Begin the response directly with the "## Overall Summary" heading.
+Select no more than 10-15 of the most critical visual moments.
+Do NOT add any conversational text, introductions, or concluding remarks. The response must be pure Markdown.
 `;
-
-                const result = await model.generateContent({
-                    contents: [{ role: "user", parts: [ {text: prompt}, videoPart] }],
-                    generationConfig: {
-                        temperature: 0.2, // Lower temperature for more factual, less creative output
-                    },
-                }, { signal }); // Pass the abort signal here
-
-                const response = await result.response;
-                progressText.textContent = "Transcript received. Analyzing for key moments...";
-                return response.text();
+                const result = await model.generateContent([prompt, videoPart]);
+                return result.response.text();
             }
 
-            async function enrichTranscriptWithFrames(markdown, videoFile) {
-                // Updated regex to capture the description.
-                const timestampRegex = /\[screenshot:(\d{2}):(\d{2}):(\d{2}) \| (.*?)\]/g;
+            async function extractFrames(markdown, videoFile) {
+                const timestampRegex = /\[screenshot:(\d{2}):(\d{2}):(\d{2}) \|.*?\]/g;
                 const matches = [...markdown.matchAll(timestampRegex)];
+                const frames = [];
 
-                if (matches.length === 0) {
-                    progressText.textContent = "No key moments identified. Displaying text-only transcript.";
-                    return markdown;
-                }
+                if (matches.length > 0) {
+                    progressText.textContent = `Pass 1/2: Found ${matches.length} key moments. Extracting frames...`;
+                    for (let i = 0; i < matches.length; i++) {
+                        if (abortController.signal.aborted) throw new DOMException("Aborted", "AbortError");
+                        const match = matches[i];
+                        const [fullMatch, hh, mm, ss] = match;
+                        const timeInSeconds = parseInt(hh) * 3600 + parseInt(mm) * 60 + parseInt(ss);
 
-                progressText.textContent = `Found ${matches.length} key moments. Extracting frames...`;
-                let enrichedMarkdown = markdown;
-
-                for (let i = 0; i < matches.length; i++) {
-                    const match = matches[i];
-                    const [fullMatch, hh, mm, ss, description] = match;
-                    const timeInSeconds = parseInt(hh) * 3600 + parseInt(mm) * 60 + parseInt(ss);
-
-                    progressText.textContent = `Extracting frame ${i + 1} of ${matches.length} at ${hh}:${mm}:${ss}...`;
-
-                    try {
-                        const frameDataUrl = await extractFrameAtTime(videoFile, timeInSeconds);
-                        // Create a figure with a caption for better semantic HTML and styling.
-                        const imageMarkdown = `<figure>\n  <img src="${frameDataUrl}" alt="${description}">\n  <figcaption>${description}</figcaption>\n</figure>`;
-                        enrichedMarkdown = enrichedMarkdown.replace(fullMatch, imageMarkdown);
-                    } catch (e) {
-                        console.error(`Could not extract frame at ${timeInSeconds}s:`, e);
-                        enrichedMarkdown = enrichedMarkdown.replace(fullMatch, `*(Could not generate frame at ${hh}:${mm}:${ss})*`);
+                        try {
+                            const frameDataUrl = await extractFrameAtTime(videoFile, timeInSeconds);
+                            frames.push({
+                                tag: fullMatch,
+                                dataUrl: frameDataUrl
+                            });
+                        } catch (e) {
+                            console.error(`Could not extract frame at ${timeInSeconds}s:`, e);
+                        }
                     }
                 }
-                return enrichedMarkdown;
+                return frames;
+            }
+
+            async function getRefinedCaptions(apiKey, frames, originalMarkdown) {
+                const genAI = new GoogleGenerativeAI(apiKey);
+                const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+
+                progressText.textContent = `Pass 2/2: Refining captions for ${frames.length} screenshots...`;
+
+                const prompt = `
+You are a visual analyst. I will provide a full transcript document that
+includes placeholders like [screenshot:...].
+I will also provide a series of images that correspond to each placeholder.
+Your task is to generate a high-quality,
+context-aware caption for each image.
+
+For each image, analyze the image itself and the text immediately
+surrounding its placeholder in the transcript.
+Write a concise, one-sentence caption that describes the visual content
+and explains its relevance to the topic being discussed.
+
+Here is the full transcript for context:
+
+---
+` + originalMarkdown + `
+---
+
+Now, here are the images in order. Provide your response as a single
+JSON array of strings, where each string is the refined caption
+for the corresponding image. For example:
+[\"Caption for the first image.\", \"Caption for the second image.\"]
+`;
+                const promptParts = [
+                    { text: prompt }
+                ];
+
+                for (const frame of frames) {
+                    if (abortController.signal.aborted) throw new DOMException("Aborted", "AbortError");
+                    promptParts.push({
+                        inlineData: {
+                            mimeType: 'image/jpeg',
+                            data: frame.dataUrl.split(',')[1]
+                        }
+                    });
+                }
+
+                const result = await model.generateContent({
+                    contents: [{ parts: promptParts }],
+                    generationConfig: { responseMimeType: "application/json" }
+                });
+
+                const text = result.response.text();
+                // Clean the response to ensure it's valid JSON
+                const cleanedText = text.replace(/```json\n?/, '').replace(/```$/, '');
+                console.log("Refined captions:", cleanedText);
+                return JSON.parse(cleanedText);
+            }
+
+            function assembleFinalMarkdown(markdown, frames, captions) {
+                let tempMarkdown = markdown;
+                if (frames.length === captions.length) {
+                    for (let i = 0; i < frames.length; i++) {
+                        const frame = frames[i];
+                        const caption = captions[i].replace(/"/g, ''); // Clean up quotes
+                        const imageMarkdown = `\n![${caption}](${frame.dataUrl})\n*${caption}*`;
+                        tempMarkdown = tempMarkdown.replace(frame.tag, imageMarkdown);
+                    }
+                } else {
+                    console.warn("Mismatch between frames and captions. Inserting images without refined captions.");
+                     for (const frame of frames) {
+                        const imageMarkdown = `\n![Frame without caption](${frame.dataUrl})\n`;
+                        tempMarkdown = tempMarkdown.replace(frame.tag, imageMarkdown);
+                    }
+                }
+                return tempMarkdown;
             }
 
             function extractFrameAtTime(file, timeInSeconds) {
@@ -427,12 +481,10 @@ Do NOT include any conversational introductions or conclusions like "Certainly, 
 
             function showConfirmationModal() {
                 confirmationModal.classList.remove('hidden');
-                confirmationModal.style.opacity = 1;
             }
 
             function hideConfirmationModal() {
-                confirmationModal.style.opacity = 0;
-                setTimeout(() => confirmationModal.classList.add('hidden'), 300);
+                confirmationModal.classList.add('hidden');
             }
         });
     </script>
