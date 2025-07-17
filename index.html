@@ -430,23 +430,38 @@
                 const videoPart = await fileToGenerativePart(file);
 
                 const systemPrompt = `
-You are a Markdown document generator.
-Output must be pure Markdown only — no JSON, no HTML, no comments, no intro/farewell.
-Start directly with "# [Video Title]".
-Document structure:
-# [Video Title]
+You are a professional technical video summarizer. Your job is to turn a video transcript and keyframes into a clean, structured Markdown document suitable for blog posts or course material.
 
-## Overall Summary
+**Format Requirements:**
+
+- Organize the document into chapters with H3 headers: \`### Chapter: [Title]\`
+- Each chapter must have:
+  - A short **summary** paragraph at the top
+  - A full **transcript** of what is said in that chapter, without omitting or summarizing
+  - Inline **[screenshot:MM:SS:FF]** tags for each timestamp provided
+- Screenshot tags must appear **in the transcript**, on their own line, surrounded by blank lines.
+- Markdown must be returned as a code block with \`\`\`markdown at the top and \`\`\` at the end.
+
+**Example:**
+
+### Chapter: Introduction
+
+**Summary:**
+Lars introduces the topic of Cardano incentives and outlines the structure of the presentation.
+
+**Transcript:**
+
+Welcome to the talk on Cardano's incentive system.
+
+[screenshot:00:01:23]
+
+This system ensures the network stays decentralized and secure.
+
+[screenshot:00:02:10]
+
 ...
 
-## Key Takeaways
-...
-
-## Chapters
-### Chapter: [Title]
-...
-[screenshot:HH:MM:SS]
-(Include 10–15 [screenshot:HH:MM:SS] tags.)
+Make the output readable, but do not summarize or paraphrase the transcript.
 `;
 
                 const result = await generateContentWithRetry(
@@ -561,52 +576,50 @@ ${frame.context}
                 return tempMarkdown;
             }
 
-            function extractFrameAtTime(file, timeInSeconds) {
+            function extractFrameAtTime(video, timeInSeconds, canvas, context) {
                 return new Promise((resolve, reject) => {
-                    const timeout = 10000; // 10-second timeout per frame
-
-                    let timeoutId = setTimeout(() => {
-                        cleanup();
-                        reject(new Error(`Frame extraction timed out after ${timeout / 1000} seconds.`));
-                    }, timeout);
-
-                    const video = document.createElement('video');
-                    const canvas = document.createElement('canvas');
-                    const context = canvas.getContext('2d');
-                    let objectUrl = URL.createObjectURL(file);
+                    let timeoutId;
 
                     const cleanup = () => {
                         clearTimeout(timeoutId);
-                        if (objectUrl) {
-                            URL.revokeObjectURL(objectUrl);
-                            objectUrl = null;
-                        }
-                        video.src = '';
-                        video.load();
+                        video.onseeked = null;
                     };
 
-                    video.onloadedmetadata = () => {
-                        canvas.width = video.videoWidth;
-                        canvas.height = video.videoHeight;
-                        video.currentTime = timeInSeconds;
-                    };
+                    video.onseeked = async () => {
+                        const start = Date.now();
+                        const maxWait = 10000;
 
-                    video.onseeked = () => {
-                        if (video.currentTime >= timeInSeconds) {
+                        const waitUntilReady = () =>
+                            new Promise((resolveReady, rejectReady) => {
+                                const check = () => {
+                                    if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+                                        resolveReady();
+                                    } else if (Date.now() - start > maxWait) {
+                                        rejectReady(new Error("Timed out waiting for video frame data"));
+                                    } else {
+                                        setTimeout(check, 50);
+                                    }
+                                };
+                                check();
+                            });
+
+                        try {
+                            await waitUntilReady();
                             context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                            const dataUrl = canvas.toDataURL('image/jpeg');
                             cleanup();
-                            resolve(dataUrl);
+                            resolve(canvas.toDataURL("image/jpeg"));
+                        } catch (err) {
+                            cleanup();
+                            reject(err);
                         }
                     };
 
-                    video.onerror = (e) => {
+                    timeoutId = setTimeout(() => {
                         cleanup();
-                        reject(new Error('Failed to load or seek video. The file may be corrupted.'));
-                    };
+                        reject(new Error("Frame extraction timed out"));
+                    }, 10000);
 
-                    video.src = objectUrl;
-                    video.muted = true;
+                    video.currentTime = timeInSeconds;
                 });
             }
 
