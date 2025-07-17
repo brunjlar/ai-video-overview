@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,18 +11,28 @@
         body {
             font-family: 'Inter', sans-serif;
         }
+
         .loader {
             border-top-color: #3498db;
             -webkit-animation: spin 1s linear infinite;
             animation: spin 1s linear infinite;
         }
+
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
-        #confirmationModal, #aboutModal {
+
+        #confirmationModal,
+        #aboutModal {
             transition: opacity 0.3s ease;
         }
+
         .prose img {
             border-radius: 0.5rem;
             box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
@@ -29,6 +40,7 @@
             margin-right: auto;
             display: block;
         }
+
         .prose em {
             color: #6b7280;
             display: block;
@@ -37,6 +49,7 @@
         }
     </style>
 </head>
+
 <body class="bg-gray-50 text-gray-800">
 
     <div class="container mx-auto max-w-4xl px-4 py-8">
@@ -51,17 +64,22 @@
                 <p class="text-gray-600 mb-4">Your API key is stored securely in your browser's local storage.</p>
                 <form id="apiKeyForm" onsubmit="return false;">
                     <div class="flex items-center space-x-2">
-                        <input type="password" id="apiKey" placeholder="Enter your Gemini API Key" class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition">
-                        <button id="saveApiKey" type="submit" class="bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-blue-700 transition">Save Key</button>
+                        <input type="password" id="apiKey" placeholder="Enter your Gemini API Key"
+                            class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition">
+                        <button id="saveApiKey" type="submit"
+                            class="bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-blue-700 transition">Save
+                            Key</button>
                     </div>
                 </form>
-                 <p id="apiKeyStatus" class="text-sm mt-2 text-green-600"></p>
+                <p id="apiKeyStatus" class="text-sm mt-2 text-green-600"></p>
             </div>
 
             <div class="bg-white p-6 rounded-xl shadow-md mb-6">
                 <h2 class="text-2xl font-semibold mb-4 text-gray-800">Step 2: Upload a Video</h2>
-                 <div class="flex flex-col items-center justify-center bg-gray-50 p-6 rounded-lg border-2 border-dashed border-gray-300">
-                     <label for="videoUpload" class="block text-lg font-medium text-gray-700 mb-2">Upload a Video (.mp4)</label>
+                <div
+                    class="flex flex-col items-center justify-center bg-gray-50 p-6 rounded-lg border-2 border-dashed border-gray-300">
+                    <label for="videoUpload" class="block text-lg font-medium text-gray-700 mb-2">Upload a Video
+                        (.mp4)</label>
                     <input type="file" id="videoUpload" accept="video/mp4" class="w-full text-sm text-gray-500
                         file:mr-4 file:py-2 file:px-4
                         file:rounded-full file:border-0
@@ -75,52 +93,82 @@
             </div>
 
             <div class="text-center mb-8">
-                <button id="processBtn" class="bg-green-600 text-white font-bold py-4 px-8 rounded-lg text-lg hover:bg-green-700 transition shadow-lg disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
+                <button id="processBtn"
+                    class="bg-green-600 text-white font-bold py-4 px-8 rounded-lg text-lg hover:bg-green-700 transition shadow-lg disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    disabled>
                     Process Video
                 </button>
             </div>
 
             <div id="outputSection" class="bg-white p-6 rounded-xl shadow-md hidden">
-                 <div class="flex justify-between items-center mb-4">
+                <div class="flex justify-between items-center mb-4">
                     <h2 class="text-2xl font-semibold text-gray-800">Result</h2>
                     <div id="downloadButtons" class="hidden">
-                        <button id="downloadMd" class="bg-gray-700 text-white font-semibold py-2 px-4 rounded-lg hover:bg-gray-800 transition text-sm">Download .md</button>
-                        <button id="downloadPdf" class="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition text-sm ml-2">Download .pdf</button>
+                        <button id="downloadMd"
+                            class="bg-gray-700 text-white font-semibold py-2 px-4 rounded-lg hover:bg-gray-800 transition text-sm">Download
+                            .md</button>
+                        <button id="downloadPdf"
+                            class="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition text-sm ml-2">Download
+                            .pdf</button>
                     </div>
                 </div>
 
                 <div id="loadingIndicator" class="text-center py-8 hidden">
-                    <div class="loader ease-linear rounded-full border-8 border-t-8 border-gray-200 h-24 w-24 mx-auto"></div>
+                    <div class="loader ease-linear rounded-full border-8 border-t-8 border-gray-200 h-24 w-24 mx-auto">
+                    </div>
                     <p id="progressText" class="mt-4 text-lg text-gray-600">Processing video...</p>
-                    <button id="interruptBtn" class="mt-4 bg-red-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-700 transition">Interrupt</button>
+                    <button id="interruptBtn"
+                        class="mt-4 bg-red-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-700 transition">Interrupt</button>
                 </div>
 
                 <div id="result" class="prose max-w-none prose-indigo"></div>
                 <div id="error" class="text-red-500 mt-4"></div>
             </div>
         </main>
-        
+
         <footer class="text-center mt-12 text-gray-500 text-sm">
             <button id="aboutBtn" class="underline hover:text-blue-600">About this App</button>
-            <p class="mt-2">Created by <a href="mailto:brunjlar@gmail.com" class="underline hover:text-blue-600">Lars Brünjes</a> | <a href="https://github.com/brunjlar/ai-video-overview" target="_blank" rel="noopener noreferrer" class="underline hover:text-blue-600">View on GitHub</a></p>
+            <p class="mt-2">Created by <a href="mailto:brunjlar@gmail.com" class="underline hover:text-blue-600">Lars
+                    Brünjes</a> | <a href="https://github.com/brunjlar/ai-video-overview" target="_blank"
+                    rel="noopener noreferrer" class="underline hover:text-blue-600">View on GitHub</a></p>
         </footer>
     </div>
 
-    <div id="aboutModal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 hidden z-50">
+    <div id="aboutModal"
+        class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 hidden z-50">
         <div class="bg-white rounded-xl shadow-2xl p-8 max-w-2xl w-full relative">
-            <button id="closeAboutBtn" class="absolute top-4 right-4 text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+            <button id="closeAboutBtn"
+                class="absolute top-4 right-4 text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
             <div class="prose max-w-none">
                 <h2>About the Video-to-Transcript Summarizer</h2>
-                <p>This application leverages the power of Google's Gemini AI to transform video content into structured, readable, and context-rich documents. It's designed for students, researchers, and anyone who needs to quickly extract and understand the key information from educational videos, lectures, or talks.</p>
+                <p>This application leverages the power of Google's Gemini AI to transform video content into
+                    structured, readable, and context-rich documents. It's designed for students, researchers, and
+                    anyone who needs to quickly extract and understand the key information from educational videos,
+                    lectures, or talks.</p>
                 <h3>How It Works</h3>
-                <p>The process happens entirely within your browser, ensuring your data and API key remain private. It uses a sophisticated two-pass workflow to generate high-quality results:</p>
+                <p>The process happens entirely within your browser, ensuring your data and API key remain private. It
+                    uses a sophisticated two-pass workflow to generate high-quality results:</p>
                 <ol>
-                    <li><strong>Pass 1: Document Structuring:</strong> When you upload a video, the app first sends it to the Gemini 1.5 Flash model. The AI is instructed to analyze the entire video and return a single, well-structured Markdown document. This document includes an overall summary, a list of key takeaways, and the full transcript, correctly divided into chapters with individual summaries. It also identifies 10-15 of the most critical visual moments and inserts simple `[screenshot:...]` placeholder tags at the correct positions within the transcript.</li>
-                    <li><strong>Pass 2: Contextual Captioning:</strong> The app then extracts the video frames for each placeholder. In a series of parallel requests, it sends each frame *along with the surrounding text from the transcript* back to the AI. This crucial step provides the necessary context for the AI to generate a meaningful, relevant caption for each image.</li>
-                    <li><strong>Final Assembly:</strong> Finally, the app assembles the final document by replacing the placeholders in the text from Pass 1 with the high-quality captions and images from Pass 2, using proper Markdown syntax. This complete document is then rendered on the screen for you to read, review, and download.</li>
+                    <li><strong>Pass 1: Document Structuring:</strong> When you upload a video, the app first sends it
+                        to the Gemini 1.5 Flash model. The AI is instructed to analyze the entire video and return a
+                        single, well-structured Markdown document. This document includes an overall summary, a list of
+                        key takeaways, and the full transcript, correctly divided into chapters with individual
+                        summaries. It also identifies 10-15 of the most critical visual moments and inserts simple
+                        `[screenshot:...]` placeholder tags at the correct positions within the transcript.</li>
+                    <li><strong>Pass 2: Contextual Captioning:</strong> The app then extracts the video frames for each
+                        placeholder. In a series of parallel requests, it sends each frame *along with the surrounding
+                        text from the transcript* back to the AI. This crucial step provides the necessary context for
+                        the AI to generate a meaningful, relevant caption for each image.</li>
+                    <li><strong>Final Assembly:</strong> Finally, the app assembles the final document by replacing the
+                        placeholders in the text from Pass 1 with the high-quality captions and images from Pass 2,
+                        using proper Markdown syntax. This complete document is then rendered on the screen for you to
+                        read, review, and download.</li>
                 </ol>
                 <h3>Why this approach?</h3>
-                <p>This two-pass, client-side architecture is designed to be both powerful and private. By breaking the complex task into smaller, focused requests, we get a much more reliable and high-quality result than a single, monolithic request could provide. All processing happens on your machine, so your video data is only ever sent directly to the Google AI API via your own key.</p>
+                <p>This two-pass, client-side architecture is designed to be both powerful and private. By breaking the
+                    complex task into smaller, focused requests, we get a much more reliable and high-quality result
+                    than a single, monolithic request could provide. All processing happens on your machine, so your
+                    video data is only ever sent directly to the Google AI API via your own key.</p>
             </div>
         </div>
     </div>
@@ -181,14 +229,14 @@
                 }
                 updateProcessButtonState();
             });
-            
+
             apiKeyInput.addEventListener('focus', () => {
                 const storedKey = localStorage.getItem('geminiApiKey');
                 if (storedKey) apiKeyInput.value = storedKey;
             });
             apiKeyInput.addEventListener('blur', () => {
                 const storedKey = localStorage.getItem('geminiApiKey');
-                 if (storedKey) apiKeyInput.value = '********' + storedKey.slice(-4);
+                if (storedKey) apiKeyInput.value = '********' + storedKey.slice(-4);
             });
 
             videoUploadInput.addEventListener('change', () => {
@@ -196,7 +244,7 @@
                     fileNameDisplay.textContent = `Selected file: ${videoUploadInput.files[0].name}`;
                 }
             });
-            
+
             processBtn.addEventListener('click', () => {
                 if (hasResult) {
                     showConfirmationModal();
@@ -218,7 +266,7 @@
                     aboutModal.classList.add('hidden');
                 }
             });
-            
+
             downloadMdBtn.addEventListener('click', () => {
                 const blob = new Blob([finalMarkdown], { type: 'text/markdown' });
                 const url = URL.createObjectURL(blob);
@@ -230,15 +278,15 @@
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
             });
-            
+
             downloadPdfBtn.addEventListener('click', () => {
                 const element = document.getElementById('result');
                 const opt = {
-                    margin:       0.5,
-                    filename:     'transcript.pdf',
-                    image:        { type: 'jpeg', quality: 0.98 },
-                    html2canvas:  { scale: 2, useCORS: true },
-                    jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+                    margin: 0.5,
+                    filename: 'transcript.pdf',
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 2, useCORS: true },
+                    jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
                 };
                 html2pdf().set(opt).from(element).save();
             });
@@ -254,7 +302,7 @@
                     console.error("Input validation failed. Aborting.");
                     return;
                 }
-                
+
                 abortController = new AbortController();
 
                 try {
@@ -262,11 +310,11 @@
                     console.info("--- PASS 1: GETTING STRUCTURED MARKDOWN ---");
                     const preliminaryMarkdown = await getStructuredMarkdown(currentApiKey, videoFile);
                     console.log("Received preliminary markdown from API:", preliminaryMarkdown);
-                    
+
                     // FRAME EXTRACTION
                     console.info("--- FRAME EXTRACTION ---");
                     const { frames, cleanedMarkdown } = await extractFramesAndContext(preliminaryMarkdown, videoFile);
-                     console.info(`Found ${frames.length} valid screenshot tags.`)
+                    console.info(`Found ${frames.length} valid screenshot tags.`)
 
                     // PASS 2: Get refined, context-aware captions for each frame in parallel
                     if (frames.length > 0) {
@@ -275,24 +323,24 @@
                         finalMarkdown = assembleFinalMarkdown(cleanedMarkdown, frames, refinedCaptions);
                     } else {
                         progressText.textContent = "No key moments identified. Assembling text-only document...";
-                         console.info("No valid screenshot tags found. Skipping caption generation.");
+                        console.info("No valid screenshot tags found. Skipping caption generation.");
                         finalMarkdown = cleanedMarkdown.replace(/\[screenshot:.*?\]/g, ''); // Clean up any stray tags
                     }
-                    
-                     console.info("--- FINAL ASSEMBLY ---");
+
+                    console.info("--- FINAL ASSEMBLY ---");
                     resultDiv.innerHTML = marked.parse(finalMarkdown);
                     finalizeUI(true);
-                     console.info("===== PROCESSING FINISHED SUCCESSFULLY =====");
+                    console.info("===== PROCESSING FINISHED SUCCESSFULLY =====");
 
                 } catch (error) {
                     if (error.name === 'AbortError') {
                         handleError('Processing was interrupted by the user.');
-                         console.warn("Processing was interrupted by the user.");
+                        console.warn("Processing was interrupted by the user.");
                     } else {
                         handleError(error.message);
-                         console.error("An unrecoverable error occurred:", error);
+                        console.error("An unrecoverable error occurred:", error);
                     }
-                     console.error("===== PROCESSING FAILED =====");
+                    console.error("===== PROCESSING FAILED =====");
                 }
             }
 
@@ -329,7 +377,7 @@
                 setInputsDisabled(false);
                 if (success) {
                     downloadButtons.classList.remove('hidden');
-                    hasResult = true; 
+                    hasResult = true;
                     videoUploadInput.value = '';
                     fileNameDisplay.textContent = '';
                 }
@@ -364,78 +412,66 @@
                             console.warn(`[API Request: ${requestName}] Failed (attempt ${i + 1}/${maxRetries}). Retrying in ${Math.round(delay)}ms...`);
                             await new Promise(resolve => setTimeout(resolve, delay));
                         } else {
-                             console.error(`[API Request: ${requestName}] Failed with non-retryable error:`, error);
+                            console.error(`[API Request: ${requestName}] Failed with non-retryable error:`, error);
                             throw error;
                         }
                     }
                 }
-                 console.error(`[API Request: ${requestName}] Failed after all ${maxRetries} attempts.`);
+                console.error(`[API Request: ${requestName}] Failed after all ${maxRetries} attempts.`);
                 throw new Error(`API call failed after ${maxRetries} attempts. Last error: ${lastError}`);
             }
 
-
             async function getStructuredMarkdown(apiKey, file) {
                 const genAI = new GoogleGenerativeAI(apiKey);
-                // FIX: Use the more powerful Pro model for this complex, high-stakes task.
                 const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
 
-                progressText.textContent = "Pass 1/2: Analyzing video and generating document structure...";
+                progressText.textContent = "Pass 1/2: Analyzing video and generating Markdown...";
+
                 const videoPart = await fileToGenerativePart(file);
-                
-                const prompt = `
-You are an expert technical writer and video analyst. 
-Your task is to create a single, comprehensive document from the provided video, formatted in Markdown.
 
-Follow this exact structure:
-
-1.  Create a main heading '# [Video Title]' with the title of the video.
-2.  Create a heading '## Overall Summary' and write a one-paragraph summary of the entire video.
-3.  Create a heading '## Key Takeaways' and write a bulleted list of the 3-5 most important points.
-4.  Then, identify the logical chapters in the video. For each chapter, you MUST create the following block:
-    - A subheading: '### Chapter: [Chapter Title]'
-    - A one-paragraph summary of that chapter.
-    - The full, clean transcript for that chapter.
-    - CRUCIALLY: As you write the transcript, you MUST insert a placeholder tag on its own line 
-      (with an empty line before and after) immediately after the sentence that references a key visual moment.
-    - The tag format is: [screenshot:HH:MM:SS]
-
-    For example:
-    > This is a sentence in the transcript that refers to a diagram.
-    >
-    > [screenshot:01:23:45]
-    >
-    > The transcript then continues with the next sentence.
-
-    Pick those "key visual moments" that are most relevant to understanding the video's content, especially those
-    that are not already obvious from the transcript alone.
-
-Select 10-15 of the most critical visual moments.
-The response must be PURE MARKDOWN. Do not add any conversational text like "Certainly, here is your markdown."
-Your output should therefore start with
-
+                const systemPrompt = `
+You are a Markdown document generator.
+Output must be pure Markdown only — no JSON, no HTML, no comments, no intro/farewell.
+Start directly with "# [Video Title]".
+Document structure:
 # [Video Title]
 
 ## Overall Summary
+...
 
-and end with the last chapter's transcript. Nothing else. Just Markdown.
+## Key Takeaways
+...
 
-This, for example, would be invalid:
-
-----
-
-Of course! Here is a detailed JSON-formatted description of the events in the video.
-
-\`\`\`json ...
-
------
-
-The "Of course! Here is..." is not part of the Markdown document. Neither is the \`\`\`\`json\` block.
-And - of course - json is not Markdown.
+## Chapters
+### Chapter: [Title]
+...
+[screenshot:HH:MM:SS]
+(Include 10–15 [screenshot:HH:MM:SS] tags.)
 `;
-                const result = await generateContentWithRetry(model, [prompt, videoPart], 5, "Initial Structure (Pro Model)");
-                return result.response.text();
+
+                const result = await generateContentWithRetry(
+                    model,
+                    {
+                        systemInstruction: {
+                            role: "system",
+                            parts: [{ text: systemPrompt }]
+                        },
+                        contents: [
+                            { role: "user", parts: [videoPart] }
+                        ],
+                        generationConfig: {
+                            responseMimeType: "text/plain"
+                        }
+                    },
+                    5,
+                    "Initial Structure (Pro Model with systemInstruction)"
+                );
+
+                const raw = result.response.text();
+                const cleaned = raw.includes("#") ? raw.slice(raw.indexOf("#")) : raw;
+                return cleaned;
             }
-            
+
             async function extractFramesAndContext(markdown, videoFile) {
                 const timestampRegex = /\[screenshot:(\d{2}):(\d{2}):(\d{2})\]/g;
                 const matches = [...markdown.matchAll(timestampRegex)];
@@ -446,11 +482,11 @@ And - of course - json is not Markdown.
                     progressText.textContent = `Pass 1/2: Found ${matches.length} key moments. Extracting frames...`;
                     for (let i = 0; i < matches.length; i++) {
                         if (abortController.signal.aborted) throw new DOMException("Aborted", "AbortError");
-                        
+
                         const match = matches[i];
                         const [fullMatch, hh, mm, ss] = match;
                         const timeInSeconds = parseInt(hh) * 3600 + parseInt(mm) * 60 + parseInt(ss);
-                        
+
                         const contextChars = 300;
                         const tagIndex = match.index;
                         const startIndex = Math.max(0, tagIndex - contextChars);
@@ -465,9 +501,9 @@ And - of course - json is not Markdown.
                                 dataUrl: frameDataUrl,
                                 context: context
                             });
-                             console.log(` -> Success.`);
+                            console.log(` -> Success.`);
                         } catch (e) {
-                             console.warn(` -> Failed to extract frame at ${hh}:${mm}:${ss}, removing tag. Error: ${e.message}`);
+                            console.warn(` -> Failed to extract frame at ${hh}:${mm}:${ss}, removing tag. Error: ${e.message}`);
                             cleanedMarkdown = cleanedMarkdown.replace(fullMatch, '');
                         }
                     }
@@ -495,15 +531,15 @@ ${frame.context}
                             data: frame.dataUrl.split(',')[1]
                         }
                     };
-                    
+
                     return generateContentWithRetry(model, [prompt, imagePart], 5, `Caption ${index + 1}/${framesWithContext.length} (Flash Model)`)
                         .then(result => {
                             const captionText = result.response.text();
-                             console.log(`Caption ${index + 1}: "${captionText.trim()}"`);
+                            console.log(`Caption ${index + 1}: "${captionText.trim()}"`);
                             return captionText;
                         })
                         .catch(err => {
-                             console.error(`Caption ${index + 1} failed after all retries:`, err);
+                            console.error(`Caption ${index + 1} failed after all retries:`, err);
                             return "A key visual from the video."; // Fallback caption
                         });
                 });
@@ -538,7 +574,7 @@ ${frame.context}
                     const canvas = document.createElement('canvas');
                     const context = canvas.getContext('2d');
                     let objectUrl = URL.createObjectURL(file);
-                    
+
                     const cleanup = () => {
                         clearTimeout(timeoutId);
                         if (objectUrl) {
@@ -597,4 +633,5 @@ ${frame.context}
         });
     </script>
 </body>
+
 </html>
