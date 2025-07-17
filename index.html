@@ -462,6 +462,10 @@ This system ensures the network stays decentralized and secure.
 ...
 
 Make the output readable, but do not summarize or paraphrase the transcript.
+
+Remember to only pick at most 10-15 key moments from the video; 
+Only include the most important screenshots that illustrate the key points discussed in each chapter and
+which are needed to understand the transcript.
 `;
 
                 const result = await generateContentWithRetry(
@@ -585,32 +589,22 @@ ${frame.context}
                         video.onseeked = null;
                     };
 
-                    video.onseeked = async () => {
-                        const start = Date.now();
-                        const maxWait = 10000;
-
-                        const waitUntilReady = () =>
-                            new Promise((resolveReady, rejectReady) => {
-                                const check = () => {
-                                    if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-                                        resolveReady();
-                                    } else if (Date.now() - start > maxWait) {
-                                        rejectReady(new Error("Timed out waiting for video frame data"));
-                                    } else {
-                                        setTimeout(check, 50);
-                                    }
-                                };
-                                check();
-                            });
-
+                    const drawFrame = () => {
                         try {
-                            await waitUntilReady();
                             context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                            cleanup();
                             resolve(canvas.toDataURL("image/jpeg"));
                         } catch (err) {
-                            cleanup();
                             reject(err);
+                        } finally {
+                            cleanup();
+                        }
+                    };
+
+                    video.onseeked = () => {
+                        if ('requestVideoFrameCallback' in video) {
+                            video.requestVideoFrameCallback(() => drawFrame());
+                        } else {
+                            drawFrame(); // Fallback
                         }
                     };
 
