@@ -245,39 +245,54 @@
 
             // --- Main Processing Logic ---
             async function startProcessing() {
+                console.info("===== PROCESSING STARTED =====");
                 resetUI();
                 const currentApiKey = localStorage.getItem('geminiApiKey');
                 const videoFile = videoUploadInput.files[0];
 
-                if (!validateInputs(currentApiKey, videoFile)) return;
+                if (!validateInputs(currentApiKey, videoFile)) {
+                    console.error("Input validation failed. Aborting.");
+                    return;
+                }
                 
                 abortController = new AbortController();
 
                 try {
                     // PASS 1: Get the structured markdown with placeholders
+                    console.info("--- PASS 1: GETTING STRUCTURED MARKDOWN ---");
                     const preliminaryMarkdown = await getStructuredMarkdown(currentApiKey, videoFile);
+                    console.log("Received preliminary markdown from API:", preliminaryMarkdown);
                     
-                    // FIX: This function now returns an object and the logic handles frame extraction failures.
+                    // FRAME EXTRACTION
+                    console.info("--- FRAME EXTRACTION ---");
                     const { frames, cleanedMarkdown } = await extractFramesAndContext(preliminaryMarkdown, videoFile);
+                     console.info(`Found ${frames.length} valid screenshot tags.`)
 
                     // PASS 2: Get refined, context-aware captions for each frame in parallel
                     if (frames.length > 0) {
+                        console.info(`--- PASS 2: GETTING ${frames.length} CAPTIONS ---`);
                         const refinedCaptions = await getRefinedCaptionsInParallel(currentApiKey, frames);
                         finalMarkdown = assembleFinalMarkdown(cleanedMarkdown, frames, refinedCaptions);
                     } else {
                         progressText.textContent = "No key moments identified. Assembling text-only document...";
+                         console.info("No valid screenshot tags found. Skipping caption generation.");
                         finalMarkdown = cleanedMarkdown.replace(/\[screenshot:.*?\]/g, ''); // Clean up any stray tags
                     }
                     
+                     console.info("--- FINAL ASSEMBLY ---");
                     resultDiv.innerHTML = marked.parse(finalMarkdown);
                     finalizeUI(true);
+                     console.info("===== PROCESSING FINISHED SUCCESSFULLY =====");
 
                 } catch (error) {
                     if (error.name === 'AbortError') {
                         handleError('Processing was interrupted by the user.');
+                         console.warn("Processing was interrupted by the user.");
                     } else {
                         handleError(error.message);
+                         console.error("An unrecoverable error occurred:", error);
                     }
+                     console.error("===== PROCESSING FAILED =====");
                 }
             }
 
@@ -331,49 +346,57 @@
                 };
             }
 
-            async function generateContentWithRetry(model, prompt, maxRetries = 5) {
+            async function generateContentWithRetry(model, prompt, maxRetries = 5, requestName = "Generic") {
                 let lastError;
                 for (let i = 0; i < maxRetries; i++) {
                     if (abortController && abortController.signal.aborted) {
                         throw new DOMException("Aborted by user", "AbortError");
                     }
                     try {
+                        console.log(`[API Request: ${requestName}] Attempt ${i + 1}/${maxRetries}...`);
                         const result = await model.generateContent(prompt);
+                        console.log(`[API Request: ${requestName}] Success.`);
                         return result;
                     } catch (error) {
                         lastError = error;
                         if (error.toString().includes('503') || error.toString().includes('overloaded')) {
                             const delay = (2 ** i * 1000) + (Math.random() * 1000);
-                            console.warn(`API call failed (attempt ${i + 1}/${maxRetries}). Retrying in ${Math.round(delay)}ms...`);
+                            console.warn(`[API Request: ${requestName}] Failed (attempt ${i + 1}/${maxRetries}). Retrying in ${Math.round(delay)}ms...`);
                             await new Promise(resolve => setTimeout(resolve, delay));
                         } else {
+                             console.error(`[API Request: ${requestName}] Failed with non-retryable error:`, error);
                             throw error;
                         }
                     }
                 }
+                 console.error(`[API Request: ${requestName}] Failed after all ${maxRetries} attempts.`);
                 throw new Error(`API call failed after ${maxRetries} attempts. Last error: ${lastError}`);
             }
 
 
             async function getStructuredMarkdown(apiKey, file) {
                 const genAI = new GoogleGenerativeAI(apiKey);
-                const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+                // FIX: Use the more powerful Pro model for this complex, high-stakes task.
+                const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
 
                 progressText.textContent = "Pass 1/2: Analyzing video and generating document structure...";
                 const videoPart = await fileToGenerativePart(file);
                 
                 const prompt = `
-You are an expert technical writer and video analyst. Your task is to create a single, comprehensive document from the provided video, formatted in Markdown.
+You are an expert technical writer and video analyst. 
+Your task is to create a single, comprehensive document from the provided video, formatted in Markdown.
 
 Follow this exact structure:
 
-1.  Create a main heading '## Overall Summary' and write a one-paragraph summary of the entire video.
-2.  Create a main heading '## Key Takeaways' and write a bulleted list of the 3-5 most important points.
-3.  Then, identify the logical chapters in the video. For each chapter, you MUST create the following block:
+1.  Create a main heading '# [Video Title]' with the title of the video.
+2.  Create a heading '## Overall Summary' and write a one-paragraph summary of the entire video.
+3.  Create a heading '## Key Takeaways' and write a bulleted list of the 3-5 most important points.
+4.  Then, identify the logical chapters in the video. For each chapter, you MUST create the following block:
     - A subheading: '### Chapter: [Chapter Title]'
     - A one-paragraph summary of that chapter.
     - The full, clean transcript for that chapter.
-    - CRUCIALLY: As you write the transcript, you MUST insert a placeholder tag on its own line (with an empty line before and after) immediately after the sentence that references a key visual moment.
+    - CRUCIALLY: As you write the transcript, you MUST insert a placeholder tag on its own line 
+      (with an empty line before and after) immediately after the sentence that references a key visual moment.
     - The tag format is: [screenshot:HH:MM:SS]
 
     For example:
@@ -383,15 +406,36 @@ Follow this exact structure:
     >
     > The transcript then continues with the next sentence.
 
+    Pick those "key visual moments" that are most relevant to understanding the video's content, especially those
+    that are not already obvious from the transcript alone.
+
 Select 10-15 of the most critical visual moments.
 The response must be PURE MARKDOWN. Do not add any conversational text like "Certainly, here is your markdown."
+Your output should therefore start with
+
+# [Video Title]
+
+## Overall Summary
+
+and end with the last chapter's transcript. Nothing else. Just Markdown.
+
+This, for example, would be invalid:
+
+----
+
+Of course! Here is a detailed JSON-formatted description of the events in the video.
+
+\`\`\`json ...
+
+-----
+
+The "Of course! Here is..." is not part of the Markdown document. Neither is the \`\`\`\`json\` block.
+And - of course - json is not Markdown.
 `;
-                const result = await generateContentWithRetry(model, [prompt, videoPart]);
+                const result = await generateContentWithRetry(model, [prompt, videoPart], 5, "Initial Structure (Pro Model)");
                 return result.response.text();
             }
             
-            // FIX: This function is now more robust. It handles failures and returns both the successfully
-            // extracted frames and a version of the markdown with tags for failed frames removed.
             async function extractFramesAndContext(markdown, videoFile) {
                 const timestampRegex = /\[screenshot:(\d{2}):(\d{2}):(\d{2})\]/g;
                 const matches = [...markdown.matchAll(timestampRegex)];
@@ -414,15 +458,16 @@ The response must be PURE MARKDOWN. Do not add any conversational text like "Cer
                         const context = markdown.substring(startIndex, endIndex);
 
                         try {
+                            console.log(`Extracting frame at ${hh}:${mm}:${ss}...`);
                             const frameDataUrl = await extractFrameAtTime(videoFile, timeInSeconds);
                             successfulFrames.push({
                                 tag: fullMatch,
                                 dataUrl: frameDataUrl,
                                 context: context
                             });
+                             console.log(` -> Success.`);
                         } catch (e) {
-                            console.warn(`Could not extract frame at ${timeInSeconds}s, removing tag. Error: ${e.message}`);
-                            // If extraction fails, remove the tag from the markdown so it doesn't appear in the final output.
+                             console.warn(` -> Failed to extract frame at ${hh}:${mm}:${ss}, removing tag. Error: ${e.message}`);
                             cleanedMarkdown = cleanedMarkdown.replace(fullMatch, '');
                         }
                     }
@@ -432,10 +477,11 @@ The response must be PURE MARKDOWN. Do not add any conversational text like "Cer
 
             async function getRefinedCaptionsInParallel(apiKey, framesWithContext) {
                 progressText.textContent = `Pass 2/2: Refining captions for ${framesWithContext.length} screenshots...`;
+                // Use the faster, cheaper Flash model for the simple captioning tasks.
                 const genAI = new GoogleGenerativeAI(apiKey);
-                const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+                const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-                const captionPromises = framesWithContext.map(frame => {
+                const captionPromises = framesWithContext.map((frame, index) => {
                     const prompt = `You are a visual analyst. Based on the provided image and its surrounding text context, write a single, concise, meaningful, one-sentence caption. The caption should describe the visual content and explain its relevance to the topic being discussed. Respond with only the caption text, nothing else.
 
 Context from transcript:
@@ -450,10 +496,14 @@ ${frame.context}
                         }
                     };
                     
-                    return generateContentWithRetry(model, [prompt, imagePart])
-                        .then(result => result.response.text())
+                    return generateContentWithRetry(model, [prompt, imagePart], 5, `Caption ${index + 1}/${framesWithContext.length} (Flash Model)`)
+                        .then(result => {
+                            const captionText = result.response.text();
+                             console.log(`Caption ${index + 1}: "${captionText.trim()}"`);
+                            return captionText;
+                        })
                         .catch(err => {
-                            console.error("Caption generation failed for a frame after all retries:", err);
+                             console.error(`Caption ${index + 1} failed after all retries:`, err);
                             return "A key visual from the video."; // Fallback caption
                         });
                 });
@@ -472,13 +522,9 @@ ${frame.context}
                         tempMarkdown = tempMarkdown.replace(frame.tag, imageMarkdown);
                     }
                 }
-                // The old `else` block is no longer needed because the logic in extractFramesAndContext
-                // and the fallback caption in getRefinedCaptionsInParallel ensure the arrays always match up
-                // with the markdown content.
                 return tempMarkdown;
             }
 
-            // FIX: This function now includes a timeout to prevent it from hanging indefinitely on a problematic video.
             function extractFrameAtTime(file, timeInSeconds) {
                 return new Promise((resolve, reject) => {
                     const timeout = 10000; // 10-second timeout per frame
@@ -510,7 +556,6 @@ ${frame.context}
                     };
 
                     video.onseeked = () => {
-                        // The 'if' condition is a safeguard for some browser behaviors
                         if (video.currentTime >= timeInSeconds) {
                             context.drawImage(video, 0, 0, canvas.width, canvas.height);
                             const dataUrl = canvas.toDataURL('image/jpeg');
