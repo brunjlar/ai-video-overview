@@ -497,6 +497,12 @@ which are needed to understand the transcript.
                 const successfulFrames = [];
                 let cleanedMarkdown = markdown;
 
+                const videoElement = await createVideoElementFromFile(videoFile);
+                const canvas = document.createElement('canvas');
+                canvas.width = videoElement.width;
+                canvas.height = videoElement.height;
+                const context = canvas.getContext('2d');
+
                 if (matches.length > 0) {
                     progressText.textContent = `Pass 1/2: Found ${matches.length} key moments. Extracting frames...`;
                     for (let i = 0; i < matches.length; i++) {
@@ -514,7 +520,7 @@ which are needed to understand the transcript.
 
                         try {
                             console.log(`Extracting frame at ${hh}:${mm}:${ss}...`);
-                            const frameDataUrl = await extractFrameAtTime(videoFile, timeInSeconds);
+                            const frameDataUrl = await extractFrameAtTime(videoElement, timeInSeconds, canvas, context);
                             successfulFrames.push({
                                 tag: fullMatch,
                                 dataUrl: frameDataUrl,
@@ -636,6 +642,24 @@ ${frame.context}
 
             function hideConfirmationModal() {
                 confirmationModal.classList.add('hidden');
+            }
+
+            function createVideoElementFromFile(file) {
+                return new Promise((resolve, reject) => {
+                    const url = URL.createObjectURL(file);
+                    const video = document.createElement('video');
+                    video.preload = 'auto';
+                    video.crossOrigin = 'anonymous';
+                    video.src = url;
+
+                    video.onloadedmetadata = () => {
+                        video.width = video.videoWidth;
+                        video.height = video.videoHeight;
+                        resolve(video);
+                    };
+
+                    video.onerror = (e) => reject(new Error("Failed to load video element."));
+                });
             }
         });
     </script>
