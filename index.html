@@ -501,7 +501,16 @@ which are needed to understand the transcript.
                 const canvas = document.createElement('canvas');
                 canvas.width = videoElement.width;
                 canvas.height = videoElement.height;
-                const context = canvas.getContext('2d');
+
+                // Verify canvas dimensions are valid
+                if (canvas.width === 0 || canvas.height === 0) {
+                    throw new Error("Canvas dimensions are zero. Cannot draw video frame.");
+                }
+
+                const context = canvas.getContext("2d");
+                if (!context) {
+                    throw new Error("Failed to get 2D context from canvas.");
+                }
 
                 if (matches.length > 0) {
                     progressText.textContent = `Pass 1/2: Found ${matches.length} key moments. Extracting frames...`;
@@ -586,8 +595,8 @@ ${frame.context}
                 return tempMarkdown;
             }
 
-            function extractFrameAtTime(video, timeInSeconds, canvas, context) {
-                return new Promise((resolve, reject) => {
+            async function extractFrameAtTime(video, timeInSeconds, canvas, context) {
+                return new Promise(async (resolve, reject) => {
                     let timeoutId;
 
                     const cleanup = () => {
@@ -597,6 +606,9 @@ ${frame.context}
 
                     const drawFrame = () => {
                         try {
+                            if (typeof context.drawImage !== "function") {
+                                throw new Error("context.drawImage is not a function. Invalid context?");
+                            }
                             context.drawImage(video, 0, 0, canvas.width, canvas.height);
                             resolve(canvas.toDataURL("image/jpeg"));
                         } catch (err) {
@@ -606,11 +618,18 @@ ${frame.context}
                         }
                     };
 
+                    // Ensure metadata is loaded
+                    if (video.readyState < 2) {
+                        await new Promise((resolveMeta) => {
+                            video.onloadeddata = resolveMeta;
+                        });
+                    }
+
                     video.onseeked = () => {
-                        if ('requestVideoFrameCallback' in video) {
+                        if ("requestVideoFrameCallback" in video) {
                             video.requestVideoFrameCallback(() => drawFrame());
                         } else {
-                            drawFrame(); // Fallback
+                            drawFrame();
                         }
                     };
 
@@ -619,7 +638,12 @@ ${frame.context}
                         reject(new Error("Frame extraction timed out"));
                     }, 10000);
 
-                    video.currentTime = timeInSeconds;
+                    try {
+                        video.currentTime = timeInSeconds;
+                    } catch (err) {
+                        cleanup();
+                        reject(err);
+                    }
                 });
             }
 
